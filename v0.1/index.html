@@ -61,14 +61,12 @@
           <div class="settings">
             <button id="openSteamButton" title="Відкрити сторінку гри в Steam" disabled>Steam</button>
             <button id="refreshGameButton" title="Оновити тільки поточну гру" disabled>↻ Гра</button>
-            <input id="apiKeyInput" type="password" placeholder="Steam Web API key" title="Опційний Steam Web API key" />
             <button id="appearanceSettingsButton" class="icon-button" title="Налаштування вигляду" aria-label="Налаштування вигляду">
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"></path>
                 <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 0 1-2.97 2.97l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V21.5a2.1 2.1 0 0 1-4.2 0v-.09a1.8 1.8 0 0 0-1.09-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 0 1-2.97-2.97l.06-.06a1.8 1.8 0 0 0 .36-1.98 1.8 1.8 0 0 0-1.65-1.09H2.5a2.1 2.1 0 0 1 0-4.2h.09a1.8 1.8 0 0 0 1.65-1.09 1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 0 1 2.97-2.97l.06.06a1.8 1.8 0 0 0 1.98.36h.01A1.8 1.8 0 0 0 9.9 2.5v-.09a2.1 2.1 0 0 1 4.2 0v.09a1.8 1.8 0 0 0 1.09 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 0 1 2.97 2.97l-.06.06a1.8 1.8 0 0 0-.36 1.98v.01a1.8 1.8 0 0 0 1.65 1.09h.09a2.1 2.1 0 0 1 0 4.2h-.09A1.8 1.8 0 0 0 19.4 15Z"></path>
               </svg>
             </button>
-            <button id="saveSettingsButton">Зберегти</button>
           </div>
           <div id="appearancePanel" class="appearance-panel hidden">
             <label>
@@ -94,6 +92,11 @@
                 <option value="large">Більший</option>
               </select>
             </label>
+            <label>
+              <span id="apiKeyLabel">Steam Web API key</span>
+              <input id="apiKeyInput" type="password" placeholder="(необов'язково)" autocomplete="off" />
+            </label>
+            <button id="saveSettingsButton">Зберегти</button>
           </div>
         </div>
 
@@ -123,18 +126,6 @@
             </div>
             <div class="panel-head">
               <input id="achievementSearch" type="search" placeholder="Фільтр досягнень" />
-              <select id="achievementSort" title="Сортування досягнень" hidden aria-hidden="true" tabindex="-1">
-                <option value="default">Як у Steam</option>
-                <option value="name">Назва A-Z</option>
-                <option value="locked-first">Заблоковані спочатку</option>
-                <option value="unlocked-first">Розблоковані спочатку</option>
-                <option value="changed-first">Змінені спочатку</option>
-                <option value="hidden-first">Приховані спочатку</option>
-                <option value="dlc-first">DLC спочатку</option>
-                <option value="base-first">Основна гра спочатку</option>
-                <option value="unlock-time-desc">Новіші розблокування</option>
-                <option value="unlock-time-asc">Старіші розблокування</option>
-              </select>
               <div class="bulk-actions">
                 <button id="unlockAllButton" class="bulk-button unlock" title="Розблокувати всі досягнення" aria-label="Розблокувати всі досягнення" disabled>
                   <svg class="bulk-icon unlock-icon" aria-hidden="true" viewBox="0 0 24 24">

@@ -95,7 +95,6 @@ const elements = {
   progressPercent: document.querySelector('#progressPercent'),
   progressBar: document.querySelector('#progressBar'),
   achievementSearch: document.querySelector('#achievementSearch'),
-  achievementSort: document.querySelector('#achievementSort'),
   achievementList: document.querySelector('#achievementList'),
   achievementCount: document.querySelector('#achievementCount'),
   unlockAllButton: document.querySelector('#unlockAllButton'),
@@ -323,9 +322,9 @@ function applyUiLanguage() {
   elements.openSteamButton.title = t('openSteam');
   elements.refreshGameButton.title = t('refreshGame');
   elements.refreshGameButton.textContent = `↻ ${getUiLanguage() === 'english' ? 'Game' : 'Гра'}`;
-  elements.apiKeyInput.title = 'Steam Web API key';
   elements.appearanceSettingsButton.title = t('appearance');
   elements.appearanceSettingsButton.setAttribute('aria-label', t('appearance'));
+  setText('#apiKeyLabel', 'Steam Web API key');
   elements.saveSettingsButton.textContent = t('save');
   setText('#uiLanguageLabel', t('uiLanguage'));
   elements.languageInput.title = t('uiLanguage');
@@ -342,17 +341,6 @@ function applyUiLanguage() {
   document.querySelector('[data-tab="history"]').textContent = t('history');
   setAttr('.achievement-filters', 'aria-label', t('achievements'));
   setAttr('.source-filters', 'aria-label', 'DLC');
-  elements.achievementSort.title = t('achievementSort');
-  const sortOptions = elements.achievementSort.options;
-  sortOptions[0].textContent = t('defaultSort');
-  sortOptions[1].textContent = t('nameSort');
-  sortOptions[2].textContent = t('lockedFirst');
-  sortOptions[3].textContent = t('unlockedFirst');
-  sortOptions[4].textContent = t('changedFirst');
-  sortOptions[5].textContent = t('hiddenFirst');
-  if (sortOptions[6]) sortOptions[6].textContent = t('dlcFirst');
-  if (sortOptions[8]) sortOptions[8].textContent = t('newestUnlocks');
-  if (sortOptions[9]) sortOptions[9].textContent = t('oldestUnlocks');
   elements.unlockAllButton.title = t('unlockAll');
   elements.unlockAllButton.setAttribute('aria-label', t('unlockAll'));
   elements.lockAllButton.title = t('lockAll');
@@ -629,9 +617,6 @@ function applyAchievementSourceFilter(filter) {
 
 function setAchievementSort(sort) {
   state.achievementSort = sort || 'default';
-  if ([...elements.achievementSort.options].some((option) => option.value === state.achievementSort)) {
-    elements.achievementSort.value = state.achievementSort;
-  }
   renderAchievements();
 }
 
@@ -1896,9 +1881,6 @@ elements.gameSort.addEventListener('change', () => {
 elements.openSteamButton.addEventListener('click', openSelectedSteamPage);
 elements.refreshGameButton.addEventListener('click', refreshSelectedGame);
 elements.achievementSearch.addEventListener('input', debounce(renderAchievements, 150));
-elements.achievementSort.addEventListener('change', () => {
-  setAchievementSort(elements.achievementSort.value || 'default');
-});
 elements.unlockAllButton.addEventListener('click', () => setAllAchievements(true));
 elements.lockAllButton.addEventListener('click', () => setAllAchievements(false));
 elements.applyAchievementChangesButton.addEventListener('click', applyAchievementChanges);
