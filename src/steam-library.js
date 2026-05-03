@@ -176,41 +176,42 @@ function isAppInfoRecordStart(buffer, offset) {
   return sectionSize > 32 && sectionSize < 16 * 1024 * 1024 && sectionState === 2;
 }
 
-function findAppNameInAppInfo(buffer, appId) {
-  const needle = Buffer.alloc(4);
-  needle.writeUInt32LE(appId);
-
-  let offset = -1;
-  while ((offset = buffer.indexOf(needle, offset + 1)) !== -1) {
-    if (!isAppInfoRecordStart(buffer, offset)) continue;
-
-    const sectionSize = buffer.readUInt32LE(offset + 4);
-    const strings = extractPrintableStrings(buffer.subarray(offset, Math.min(buffer.length, offset + sectionSize)));
-    const gameIndex = strings.findIndex((value) => value.toLowerCase() === 'game');
-    const candidate = gameIndex > 0 ? strings[gameIndex - 1] : '';
-    if (isPlausibleAppName(candidate)) return candidate;
-
-    const fallback = strings.find(isPlausibleAppName);
-    if (fallback) return fallback;
-  }
-
-  return '';
+function extractAppNameAt(buffer, offset) {
+  const sectionSize = buffer.readUInt32LE(offset + 4);
+  const strings = extractPrintableStrings(buffer.subarray(offset, Math.min(buffer.length, offset + sectionSize)));
+  const gameIndex = strings.findIndex((value) => value.toLowerCase() === 'game');
+  const candidate = gameIndex > 0 ? strings[gameIndex - 1] : '';
+  if (isPlausibleAppName(candidate)) return candidate;
+  return strings.find(isPlausibleAppName) || '';
 }
 
 async function readAppInfoNames(steamRoot, appIds) {
   const appInfoPath = path.join(steamRoot, 'appcache', 'appinfo.vdf');
   const names = new Map();
-  let buffer;
+  const wanted = new Set();
+  for (const appId of appIds) {
+    const numericId = Number(appId);
+    if (Number.isInteger(numericId) && numericId > 0) wanted.add(numericId);
+  }
+  if (!wanted.size) return names;
 
+  let buffer;
   try {
     buffer = await fs.readFile(appInfoPath);
   } catch {
     return names;
   }
 
-  for (const appId of appIds) {
-    const name = findAppNameInAppInfo(buffer, appId);
-    if (name) names.set(appId, name);
+  for (let offset = 0; offset + 12 < buffer.length && wanted.size; offset++) {
+    const appId = buffer.readUInt32LE(offset);
+    if (!wanted.has(appId)) continue;
+    if (!isAppInfoRecordStart(buffer, offset)) continue;
+
+    const name = extractAppNameAt(buffer, offset);
+    if (name) {
+      names.set(appId, name);
+      wanted.delete(appId);
+    }
   }
 
   return names;
@@ -355,18 +356,35 @@ async function readInstalledGames(libraries, options = {}) {
   }
 
   if (steamRoot) {
-    for (const game of gamesByAppId.values()) {
-      game.icon = await getLocalGameIcon(steamRoot, game.appId) || getSteamStoreIcon(game.appId);
-      game.hasAchievements = await hasLocalAchievementSchema(steamRoot, game.appId);
-    }
+    const games = [...gamesByAppId.values()];
+    await mapWithConcurrency(games, 8, async (game) => {
+      const [icon, hasAchievements] = await Promise.all([
+        getLocalGameIcon(steamRoot, game.appId),
+        hasLocalAchievementSchema(steamRoot, game.appId),
+      ]);
+      game.icon = icon || getSteamStoreIcon(game.appId);
+      game.hasAchievements = hasAchievements;
+    });
   }
 
   const games = [...gamesByAppId.values()];
   return games.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+async function mapWithConcurrency(items, limit, fn) {
+  if (!items.length) return;
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+}
+
 module.exports = {
   findSteamLibraries,
   readInstalledGames,
-  parseVdf,
 };

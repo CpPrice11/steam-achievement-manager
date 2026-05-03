@@ -421,7 +421,9 @@ async function getGameSchema(appId, apiKey = '', language = 'english', libraries
   const hasGlobal = global.achievements.length;
 
   if (hasLocal || hasWeb || hasGlobal) {
-    const bestStructured = hasWeb && web.achievements.length >= local.achievements.length ? web : local;
+    const webScore = web.achievements.length + web.stats.length;
+    const localScore = local.achievements.length + local.stats.length;
+    const bestStructured = hasWeb && webScore >= localScore ? web : local;
     const secondaryStructured = bestStructured === web ? local : web;
     const merged = mergeSchemas(bestStructured, mergeSchemas(secondaryStructured, global));
 
@@ -450,4 +452,4 @@ async function getGameSchema(appId, apiKey = '', language = 'english', libraries
     : { status: local.status || web.status || 'empty', achievements: [], stats: [] };
 }
 
-module.exports = { getGameSchema, getLocalGameSchema, parseLocalSchemaBuffer, parseCommunityAchievements };
+module.exports = { getGameSchema, getLocalGameSchema };

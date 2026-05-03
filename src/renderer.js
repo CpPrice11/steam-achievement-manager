@@ -1,13 +1,32 @@
+const GAME_CACHE_MAX = 25;
+const ALLOWED_LANGUAGES = ['ukrainian', 'english'];
+const ALLOWED_THEMES = ['dark', 'light', 'system'];
+const ALLOWED_UI_SCALES = ['compact', 'normal', 'large'];
+const ALLOWED_GAME_SORTS = ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'];
+
+function pickAllowed(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
+function debounce(fn, delay) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
 const state = {
   games: [],
   selectedGame: null,
   achievements: [],
+  achievementByKey: new Map(),
   pendingAchievements: new Map(),
   statsSchema: [],
   stats: [],
   diagnostics: null,
   history: [],
-  settings: { apiKey: '', language: 'ukrainian', theme: 'dark', compact: true },
+  settings: { apiKey: '', language: 'ukrainian', theme: 'dark' },
   activeProfileId: '',
   activePersona: '',
   gameRiskFilter: 'all',
@@ -23,6 +42,28 @@ const state = {
   statsTypeFilter: 'all',
   steamworksDiagnostics: null,
 };
+
+function setAchievementsState(next) {
+  state.achievements = next;
+  state.achievementByKey = new Map(next.map((achievement) => [getAchievementKey(achievement), achievement]));
+}
+
+function getGameCacheEntry(key) {
+  if (!state.gameCache.has(key)) return undefined;
+  const value = state.gameCache.get(key);
+  state.gameCache.delete(key);
+  state.gameCache.set(key, value);
+  return value;
+}
+
+function setGameCacheEntry(key, value) {
+  if (state.gameCache.has(key)) state.gameCache.delete(key);
+  state.gameCache.set(key, value);
+  while (state.gameCache.size > GAME_CACHE_MAX) {
+    const oldest = state.gameCache.keys().next().value;
+    state.gameCache.delete(oldest);
+  }
+}
 
 const elements = {
   steamStatus: document.querySelector('#steamStatus'),
@@ -353,13 +394,11 @@ function setLanguageValue(language) {
 }
 
 function setThemeValue(theme) {
-  const value = ['dark', 'light', 'system'].includes(theme) ? theme : 'dark';
-  elements.themeInput.value = value;
+  elements.themeInput.value = pickAllowed(theme, ALLOWED_THEMES, 'dark');
 }
 
 function setScaleValue(scale) {
-  const value = ['compact', 'normal', 'large'].includes(scale) ? scale : 'compact';
-  elements.uiScaleInput.value = value;
+  elements.uiScaleInput.value = pickAllowed(scale, ALLOWED_UI_SCALES, 'compact');
 }
 
 function applyAppearance() {
@@ -429,7 +468,9 @@ function isSuspiciousGameName(name, appId = 0) {
   if (value.length < 3) return true;
   if (!/[\p{L}\p{N}]/u.test(value)) return true;
   if ((value.match(/[\p{L}]/gu) || []).length < 2) return true;
+  if (/^[^\p{L}\p{N}]*[\p{L}]{1,2}[^\p{L}\p{N}]*$/u.test(value)) return true;
   if (/^[a-zA-Z]{1,3}$/.test(value)) return true;
+  if (/^[\W_]+$/.test(value)) return true;
   return false;
 }
 
@@ -1195,9 +1236,7 @@ async function loadStatusAndGames() {
     setLanguageValue(state.settings.language);
     setThemeValue(state.settings.theme);
     setScaleValue(state.settings.uiScale);
-    state.gameSort = ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'].includes(state.settings.gameSort)
-      ? state.settings.gameSort
-      : 'name';
+    state.gameSort = pickAllowed(state.settings.gameSort, ALLOWED_GAME_SORTS, 'name');
     elements.gameSort.value = state.gameSort;
     applyAppearance();
     applyUiLanguage();
@@ -1297,7 +1336,7 @@ function getStateNotice(stateStatus, hasAchievements) {
 }
 
 function applyLoadedGameResult(result) {
-  state.achievements = (result.achievements || []).map((achievement, order) => ({ ...achievement, order }));
+  setAchievementsState((result.achievements || []).map((achievement, order) => ({ ...achievement, order })));
   state.statsSchema = result.stats || [];
   state.diagnostics = {
     ...(result.diagnostics || {}),
@@ -1319,7 +1358,7 @@ function applyLoadedGameResult(result) {
 
 async function selectGame(game, { force = false } = {}) {
   state.selectedGame = game;
-  state.achievements = [];
+  setAchievementsState([]);
   state.pendingAchievements.clear();
   state.statsSchema = [];
   state.stats = [];
@@ -1328,7 +1367,7 @@ async function selectGame(game, { force = false } = {}) {
   renderSelection();
 
   const cacheKey = getGameCacheKey(game);
-  const cached = force ? null : state.gameCache.get(cacheKey);
+  const cached = force ? null : getGameCacheEntry(cacheKey);
   if (cached) {
     const notice = applyLoadedGameResult(cached);
     const riskNotice = isRiskyGame(game)
@@ -1353,7 +1392,7 @@ async function selectGame(game, { force = false } = {}) {
     });
     if (loadToken !== state.loadToken || Number(state.selectedGame?.appId) !== Number(game.appId)) return;
 
-    state.gameCache.set(cacheKey, result);
+    setGameCacheEntry(cacheKey, result);
     setLoading('Підготовка списку', `${game.name}: застосовую фільтри, назви та іконки...`);
     const notice = applyLoadedGameResult(result);
     const riskNotice = isRiskyGame(game)
@@ -1405,7 +1444,7 @@ function setAllAchievements(achieved) {
 }
 
 function getAchievementByKey(key) {
-  return state.achievements.find((item) => getAchievementKey(item) === key);
+  return state.achievementByKey.get(key);
 }
 
 function getAchievementNameByKey(key) {
@@ -1624,15 +1663,15 @@ async function applyAchievementChanges() {
     const changedByKey = new Map(changed.map((change) => [getChangeKey(change), change.achieved]));
     const appliedAt = Math.floor(Date.now() / 1000);
 
-    state.achievements = state.achievements.map((achievement) => (
-      changedByKey.has(getAchievementKey(achievement))
-        ? {
-          ...achievement,
-          achieved: changedByKey.get(getAchievementKey(achievement)),
-          unlockTime: changedByKey.get(getAchievementKey(achievement)) ? (achievement.unlockTime || appliedAt) : 0,
-        }
-        : achievement
-    ));
+    setAchievementsState(state.achievements.map((achievement) => {
+      const nextAchieved = changedByKey.get(getAchievementKey(achievement));
+      if (nextAchieved === undefined) return achievement;
+      return {
+        ...achievement,
+        achieved: nextAchieved,
+        unlockTime: nextAchieved ? appliedAt : 0,
+      };
+    }));
 
     for (const change of changed) {
       state.pendingAchievements.delete(getChangeKey(change));
@@ -1643,9 +1682,9 @@ async function applyAchievementChanges() {
 
     if (state.selectedGame) {
       const cacheKey = getGameCacheKey(state.selectedGame);
-      const cached = state.gameCache.get(cacheKey);
+      const cached = getGameCacheEntry(cacheKey);
       if (cached) {
-        state.gameCache.set(cacheKey, {
+        setGameCacheEntry(cacheKey, {
           ...cached,
           achievements: state.achievements.map((achievement) => ({ ...achievement })),
         });
@@ -1761,7 +1800,6 @@ async function saveSettings({ silent = false } = {}) {
       theme: elements.themeInput.value || 'dark',
       uiScale: elements.uiScaleInput.value || 'compact',
       gameSort: state.gameSort || 'name',
-      compact: true,
       profileId: state.activeProfileId,
       persona: state.activePersona,
     });
@@ -1857,7 +1895,7 @@ elements.gameSort.addEventListener('change', () => {
 });
 elements.openSteamButton.addEventListener('click', openSelectedSteamPage);
 elements.refreshGameButton.addEventListener('click', refreshSelectedGame);
-elements.achievementSearch.addEventListener('input', renderAchievements);
+elements.achievementSearch.addEventListener('input', debounce(renderAchievements, 150));
 elements.achievementSort.addEventListener('change', () => {
   setAchievementSort(elements.achievementSort.value || 'default');
 });

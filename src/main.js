@@ -9,6 +9,16 @@ const { findSteamLibraries, readInstalledGames } = require('./steam-library');
 const { getGameSchema, getLocalGameSchema } = require('./schema');
 const { getAchievementDlcSource } = require('./dlc-classifier');
 
+const ALLOWED_LANGUAGES = ['ukrainian', 'english'];
+const ALLOWED_THEMES = ['dark', 'light', 'system'];
+const ALLOWED_UI_SCALES = ['compact', 'normal', 'large'];
+const ALLOWED_GAME_SORTS = ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'];
+const NON_GAME_STORE_TYPES = new Set(['dlc', 'music', 'video', 'episode', 'series', 'advertising', 'config']);
+
+function pickAllowed(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
 let mainWindow;
 
 function createWindow() {
@@ -223,11 +233,10 @@ function normalizeSettings(settings) {
 
   return {
     apiKey: String(settings?.apiKey || '').trim(),
-    language: ['ukrainian', 'english'].includes(settings?.language) ? settings.language : 'ukrainian',
-    theme: ['dark', 'light', 'system'].includes(settings?.theme) ? settings.theme : 'dark',
-    uiScale: ['compact', 'normal', 'large'].includes(settings?.uiScale) ? settings.uiScale : 'compact',
-    gameSort: ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'].includes(settings?.gameSort) ? settings.gameSort : 'name',
-    compact: true,
+    language: pickAllowed(settings?.language, ALLOWED_LANGUAGES, 'ukrainian'),
+    theme: pickAllowed(settings?.theme, ALLOWED_THEMES, 'dark'),
+    uiScale: pickAllowed(settings?.uiScale, ALLOWED_UI_SCALES, 'compact'),
+    gameSort: pickAllowed(settings?.gameSort, ALLOWED_GAME_SORTS, 'name'),
     profiles,
   };
 }
@@ -237,11 +246,10 @@ function getProfileSettings(settings, profileId) {
   const profile = profileId ? normalized.profiles[profileId] : null;
   return {
     apiKey: String(profile?.apiKey ?? normalized.apiKey ?? '').trim(),
-    language: ['ukrainian', 'english'].includes(profile?.language ?? normalized.language) ? (profile?.language ?? normalized.language) : 'ukrainian',
-    theme: ['dark', 'light', 'system'].includes(profile?.theme ?? normalized.theme) ? (profile?.theme ?? normalized.theme) : 'dark',
-    uiScale: ['compact', 'normal', 'large'].includes(profile?.uiScale ?? normalized.uiScale) ? (profile?.uiScale ?? normalized.uiScale) : 'compact',
-    gameSort: ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'].includes(profile?.gameSort ?? normalized.gameSort) ? (profile?.gameSort ?? normalized.gameSort) : 'name',
-    compact: true,
+    language: pickAllowed(profile?.language ?? normalized.language, ALLOWED_LANGUAGES, 'ukrainian'),
+    theme: pickAllowed(profile?.theme ?? normalized.theme, ALLOWED_THEMES, 'dark'),
+    uiScale: pickAllowed(profile?.uiScale ?? normalized.uiScale, ALLOWED_UI_SCALES, 'compact'),
+    gameSort: pickAllowed(profile?.gameSort ?? normalized.gameSort, ALLOWED_GAME_SORTS, 'name'),
     profileId: profileId || '',
     persona: String(profile?.persona || ''),
   };
@@ -253,11 +261,10 @@ async function saveSettingsForProfile(settings) {
   const next = normalizeSettings(existing);
   const values = {
     apiKey: String(settings?.apiKey || '').trim(),
-    language: ['ukrainian', 'english'].includes(settings?.language) ? settings.language : 'ukrainian',
-    theme: ['dark', 'light', 'system'].includes(settings?.theme) ? settings.theme : 'dark',
-    uiScale: ['compact', 'normal', 'large'].includes(settings?.uiScale) ? settings.uiScale : 'compact',
-    gameSort: ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'].includes(settings?.gameSort) ? settings.gameSort : 'name',
-    compact: true,
+    language: pickAllowed(settings?.language, ALLOWED_LANGUAGES, 'ukrainian'),
+    theme: pickAllowed(settings?.theme, ALLOWED_THEMES, 'dark'),
+    uiScale: pickAllowed(settings?.uiScale, ALLOWED_UI_SCALES, 'compact'),
+    gameSort: pickAllowed(settings?.gameSort, ALLOWED_GAME_SORTS, 'name'),
     persona: String(settings?.persona || ''),
   };
 
@@ -272,7 +279,6 @@ async function saveSettingsForProfile(settings) {
     next.theme = values.theme;
     next.uiScale = values.uiScale;
     next.gameSort = values.gameSort;
-    next.compact = true;
   }
 
   await writeSettings(next);
@@ -543,12 +549,8 @@ async function applyAchievementChangeGroup(appId, changes, options = {}) {
   });
 }
 
-function normalizeChangedWithAppId(result, appId) {
-  return (result.changed || []).map((change) => ({ ...change, appId }));
-}
-
-function normalizeFailedWithAppId(result, appId) {
-  return (result.failed || []).map((change) => ({ ...change, appId }));
+function withAppId(items, appId) {
+  return (items || []).map((change) => ({ ...change, appId }));
 }
 
 async function applyAchievementChangeGroupWithRetries(appId, changes) {
@@ -559,14 +561,14 @@ async function applyAchievementChangeGroupWithRetries(appId, changes) {
     primary = { changed: [], failed: changes };
   }
 
-  const changed = normalizeChangedWithAppId(primary, appId);
-  let failed = normalizeFailedWithAppId(primary, appId);
+  const changed = withAppId(primary.changed, appId);
+  let failed = withAppId(primary.failed, appId);
   if (!failed.length) return { changed, failed };
 
   try {
     const retry = await applyAchievementChangeGroup(appId, failed, { initMode: 'appid-file' });
-    changed.push(...normalizeChangedWithAppId(retry, appId));
-    failed = normalizeFailedWithAppId(retry, appId);
+    changed.push(...withAppId(retry.changed, appId));
+    failed = withAppId(retry.failed, appId);
   } catch {
     // Keep the original failed list.
   }
@@ -578,8 +580,8 @@ async function applyAchievementChangeGroupWithRetries(appId, changes) {
       id: change.id,
       achieved: change.achieved,
     })));
-    changed.push(...normalizeChangedWithAppId(flatResult, appId));
-    failed = normalizeFailedWithAppId(flatResult, appId);
+    changed.push(...withAppId(flatResult.changed, appId));
+    failed = withAppId(flatResult.failed, appId);
   } catch {
     // Keep the failed list from steamworks.js if the native flat helper is unavailable.
   }
@@ -619,7 +621,7 @@ async function enrichGameListWithStoreDetails(games) {
     const appId = Number(game.appId);
     const detail = details.get(appId);
     const type = String(detail?.type || '').toLowerCase();
-    if (detail && type && !['game', 'demo'].includes(type)) continue;
+    if (NON_GAME_STORE_TYPES.has(type)) continue;
 
     const storeName = String(detail?.name || '').trim();
     const storeIcon = getStoreIconFromDetails(appId, detail);
@@ -925,22 +927,39 @@ async function getGameDlcAppIds(appId) {
   return [...ids].slice(0, 250);
 }
 
+const appDetailsCache = new Map();
+
 async function getAppDetails(appIds) {
   const details = new Map();
-  if (!appIds.length) return new Map();
+  if (!appIds.length) return details;
+
+  const missing = [];
+  const seen = new Set();
+  for (const rawAppId of appIds) {
+    const appId = Number(rawAppId);
+    if (!Number.isInteger(appId) || appId <= 0 || seen.has(appId)) continue;
+    seen.add(appId);
+    if (appDetailsCache.has(appId)) {
+      const cached = appDetailsCache.get(appId);
+      if (cached) details.set(appId, cached);
+    } else {
+      missing.push(appId);
+    }
+  }
 
   const chunkSize = 50;
-  for (let index = 0; index < appIds.length; index += chunkSize) {
-    const chunk = appIds.slice(index, index + chunkSize);
+  for (let index = 0; index < missing.length; index += chunkSize) {
+    const chunk = missing.slice(index, index + chunkSize);
     try {
       const url = `https://store.steampowered.com/api/appdetails?appids=${chunk.join(',')}&filters=basic`;
       const body = await fetchJson(url);
       for (const appId of chunk) {
-        const data = body?.[String(appId)]?.data;
+        const data = body?.[String(appId)]?.data || null;
+        appDetailsCache.set(appId, data);
         if (data) details.set(appId, data);
       }
     } catch {
-      // Keep any details gathered from earlier chunks.
+      // Don't cache on chunk failure so a future call can retry.
     }
   }
 
@@ -982,9 +1001,11 @@ async function getDlcNames(appIds) {
 }
 
 ipcMain.handle('app:getStatus', async () => {
-  const steamRunning = await isSteamRunning();
-  const libraries = await findSteamLibraries();
-  const allSettings = await readSettings();
+  const [steamRunning, libraries, allSettings] = await Promise.all([
+    isSteamRunning(),
+    findSteamLibraries(),
+    readSettings(),
+  ]);
   let profile = null;
 
   if (steamRunning) {
@@ -1117,49 +1138,46 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
   const dlcCandidates = await withTimeout(getGameDlcAppIds(numericAppId), 7000, []);
   const dlcDetails = await withTimeout(getValidatedDlcDetails(numericAppId, dlcCandidates), 7000, new Map());
   const dlcAppIds = [...dlcDetails.keys()];
-  const dlcAchievements = [];
   const baseAchievementIdSet = new Set(baseAchievementIds);
 
-  for (const dlcAppId of dlcAppIds) {
+  const dlcResults = await Promise.all(dlcAppIds.map(async (dlcAppId) => {
     try {
       const dlcSchema = await getGameSchema(dlcAppId, apiKey, language, libraries);
       const dlcIds = (dlcSchema.achievements || []).map((achievement) => achievement.name);
-      if (!dlcIds.length) continue;
-      if (dlcIds.every((id) => baseAchievementIdSet.has(id))) continue;
+      if (!dlcIds.length) return [];
+      if (dlcIds.every((id) => baseAchievementIdSet.has(id))) return [];
 
       const dlcStates = await readPlayerAchievementStates(dlcAppId, dlcIds, apiKey, steamId, {
         allowSteamworksFallback: false,
       });
-      const states = dlcIds.map((id) => {
+      const dlcSchemaById = new Map((dlcSchema.achievements || []).map((item) => [item.name, item]));
+      const sourceAppName = dlcDetails.get(dlcAppId)?.name || `DLC ${dlcAppId}`;
+
+      return dlcIds.map((id) => {
         const state = normalizeAchievementState(dlcStates.states.get(id));
+        const meta = dlcSchemaById.get(id) || {};
         return {
           id,
           achieved: state.achieved,
           unlockTime: state.unlockTime,
-        };
-      });
-
-      const dlcSchemaById = new Map((dlcSchema.achievements || []).map((item) => [item.name, item]));
-      for (const achievement of states) {
-        const meta = dlcSchemaById.get(achievement.id) || {};
-        dlcAchievements.push({
-          ...achievement,
           appId: dlcAppId,
           sourceAppId: dlcAppId,
-          sourceAppName: dlcDetails.get(dlcAppId)?.name || `DLC ${dlcAppId}`,
+          sourceAppName,
           isDlc: true,
-          displayName: meta.displayName || achievement.id,
+          displayName: meta.displayName || id,
           description: meta.description || '',
           hidden: Boolean(meta.hidden),
           changeProtected: Boolean(meta.changeProtected),
           icon: meta.icon || '',
           iconGray: meta.iconGray || '',
-        });
-      }
+        };
+      });
     } catch {
       // DLC schema availability varies a lot between games.
+      return [];
     }
-  }
+  }));
+  const dlcAchievements = dlcResults.flat();
 
   const result = {
     schemaStatus: schema.status,
@@ -1234,12 +1252,6 @@ ipcMain.handle('achievement:applyChanges', async (_event, { appId, changes }) =>
       failed.push(...fallback.failed.map((change) => ({ ...change, appId: groupAppId })));
     } else {
       failed.push(...result.failed);
-    }
-
-    if (!result.failed.length && groupAppId !== baseAppId) {
-      for (const change of result.changed) {
-        change.appId = groupAppId;
-      }
     }
   }
 
