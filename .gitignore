@@ -6,8 +6,10 @@ node_modules/
 dist/
 build/
 out/
-Portable/
-Setup/
+Portable/*
+!Portable/.gitkeep
+Setup/*
+!Setup/.gitkeep
 
 # Logs
 npm-debug.log*
