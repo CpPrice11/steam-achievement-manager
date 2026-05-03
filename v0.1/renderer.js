@@ -113,6 +113,8 @@ const elements = {
   openBackupsFolderButton: document.querySelector('#openBackupsFolderButton'),
   historyList: document.querySelector('#historyList'),
   historyCount: document.querySelector('#historyCount'),
+  gameBanner: document.querySelector('#gameBanner'),
+  refreshGameLabel: document.querySelector('#refreshGameLabel'),
 };
 
 const RISKY_APP_IDS = new Set([
@@ -321,7 +323,7 @@ function applyUiLanguage() {
   elements.libraryDiagnosticsButton.title = t('libraryDiagnostics');
   elements.openSteamButton.title = t('openSteam');
   elements.refreshGameButton.title = t('refreshGame');
-  elements.refreshGameButton.textContent = `↻ ${getUiLanguage() === 'english' ? 'Game' : 'Гра'}`;
+  if (elements.refreshGameLabel) elements.refreshGameLabel.textContent = getUiLanguage() === 'english' ? 'Game' : 'Гра';
   elements.appearanceSettingsButton.title = t('appearance');
   elements.appearanceSettingsButton.setAttribute('aria-label', t('appearance'));
   setText('#apiKeyLabel', 'Steam Web API key');
@@ -761,6 +763,27 @@ function getFilteredAchievements() {
   return sortAchievements(filtered);
 }
 
+function renderBanner() {
+  const banner = elements.gameBanner;
+  if (!banner) return;
+  if (!state.selectedGame) {
+    banner.classList.add('hidden');
+    banner.style.backgroundImage = '';
+    return;
+  }
+  const appId = state.selectedGame.appId;
+  const url = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
+  const img = new Image();
+  img.onload = () => {
+    if (Number(state.selectedGame?.appId) !== Number(appId)) return;
+    banner.style.backgroundImage = `url("${url}")`;
+    banner.classList.remove('hidden');
+  };
+  img.onerror = () => { banner.classList.add('hidden'); };
+  banner.classList.add('hidden');
+  img.src = url;
+}
+
 function renderProgress() {
   if (!state.achievements.length) {
     elements.progressSummary.classList.add('hidden');
@@ -891,11 +914,14 @@ function renderAchievements() {
 
   if (!achievements.length) {
     elements.achievementList.className = 'achievement-list empty-state';
-    elements.achievementList.textContent = state.selectedGame ? t('noAchievementsAvailable') : t('chooseGameForAchievements');
+    const emptyIcon = state.selectedGame
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/><path d="M6 10h1m10 0h1"/></svg>`;
+    elements.achievementList.innerHTML = `<div class="empty-inner">${emptyIcon}<p>${escapeHtml(state.selectedGame ? t('noAchievementsAvailable') : t('chooseGameForAchievements'))}</p></div>`;
     return;
   }
 
-  elements.achievementList.className = `achievement-list ${state.achievementViewMode === 'table' ? 'table-mode' : ''}`;
+  elements.achievementList.className = `achievement-list ${state.achievementViewMode === 'table' ? 'table-mode' : ''} list-animate`;
   if (state.achievementViewMode === 'table') {
     const header = document.createElement('div');
     header.className = 'achievement-table-header';
@@ -1202,6 +1228,7 @@ function renderSelection() {
   elements.selectedAppId.textContent = state.selectedGame ? `AppID ${state.selectedGame.appId}` : t('noGameSelectedMeta');
   elements.openSteamButton.disabled = !state.selectedGame;
   elements.refreshGameButton.disabled = !state.selectedGame;
+  renderBanner();
   renderGames();
   renderAchievements();
   renderStats();

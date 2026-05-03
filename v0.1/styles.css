@@ -359,10 +359,39 @@ body.theme-light .game-icon { background: #c8dae8; }
 /* ─── Content area ───────────────────────────────────────────────── */
 .content {
   display: grid;
-  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-rows: auto auto auto auto auto 1fr; /* +banner row */
   min-width: 0;
   min-height: 0;
   background: var(--bg);
+}
+
+/* ─── Game banner ────────────────────────────────────────────────── */
+.game-banner {
+  position: relative;
+  height: 80px;
+  overflow: hidden;
+  background: var(--sidebar-bg);
+  background-size: cover;
+  background-position: center 35%;
+  border-bottom: 1px solid rgba(42, 71, 94, 0.5);
+}
+
+.game-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right,
+    rgba(27, 40, 56, 0.9) 0%,
+    rgba(27, 40, 56, 0.5) 40%,
+    transparent 72%);
+  pointer-events: none;
+}
+
+body.theme-light .game-banner::after {
+  background: linear-gradient(to right,
+    rgba(223, 227, 230, 0.9) 0%,
+    rgba(223, 227, 230, 0.5) 40%,
+    transparent 72%);
 }
 
 /* ─── Toolbar ────────────────────────────────────────────────────── */
@@ -402,6 +431,25 @@ body.theme-light .game-icon { background: #c8dae8; }
 .settings button {
   height: 32px;
   padding: 0 10px;
+}
+
+/* Icon + text toolbar buttons (Steam, Refresh Game) */
+.icon-text-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-text-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .icon-button,
@@ -607,22 +655,42 @@ body.theme-light .game-icon { background: #c8dae8; }
 }
 
 .progress-track {
-  height: 5px;
+  height: 7px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--input-bg);
-  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(42, 71, 94, 0.6);
 }
 
 .progress-bar {
   height: 100%;
   width: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3a8a1e, #5ba32b);
-  transition: width 0.4s ease;
+  background: linear-gradient(90deg,
+    #2e7318 0%,
+    #4fa822 45%,
+    #6dbf30 100%);
+  box-shadow: 0 0 6px rgba(91, 163, 43, 0.45);
+  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body.theme-light .progress-track { background: #d8e5ed; }
+
+/* ─── Filter row ─────────────────────────────────────────────────── */
+.filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.achievement-filters,
+.source-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 
 /* ─── Achievement controls deck ──────────────────────────────────── */
 .achievement-control-deck,
@@ -1028,10 +1096,16 @@ body.theme-light .achievement-icon.blank {
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: rgba(102, 192, 244, 0.04);
+  padding: 8px 10px;
+  border: none;
+  border-left: 2px solid rgba(42, 71, 94, 0.7);
+  border-radius: 0 3px 3px 0;
+  background: rgba(102, 192, 244, 0.03);
+  transition: border-color 0.12s;
+}
+
+.diagnostics-grid div:hover {
+  border-left-color: var(--accent);
 }
 
 .diagnostics-grid strong { overflow-wrap: anywhere; font-size: 11px; }
@@ -1089,6 +1163,16 @@ body.scale-large .achievement-copy em,
 body.scale-large .stat-name span { font-size: 13px; }
 body.scale-large .achievement-list.table-mode .achievement-row { min-height: 66px; }
 
+/* ─── List load animation ────────────────────────────────────────── */
+@keyframes list-appear {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.list-animate {
+  animation: list-appear 0.18s ease forwards;
+}
+
 /* ─── Empty states ───────────────────────────────────────────────── */
 .empty-state {
   display: grid;
@@ -1097,6 +1181,27 @@ body.scale-large .achievement-list.table-mode .achievement-row { min-height: 66p
   padding: 24px;
   color: var(--muted);
   text-align: center;
+  font-size: 13px;
+}
+
+.empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 320px;
+}
+
+.empty-inner svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.3;
+  flex-shrink: 0;
+}
+
+.empty-inner p {
+  margin: 0;
+  line-height: 1.5;
   font-size: 13px;
 }
 
