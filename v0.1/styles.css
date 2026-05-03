@@ -92,8 +92,19 @@ input:focus, select:focus {
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* Dark styling for native <select> dropdown options (Chromium supports this) */
+select option {
+  background: #1e2a38;
+  color: #c7d5e0;
+}
+
 body.theme-light input,
 body.theme-light select { background: #ffffff; }
+
+body.theme-light select option {
+  background: #ffffff;
+  color: #1b2838;
+}
 
 /* ─── Layout ─────────────────────────────────────────────────────── */
 .app-shell {
@@ -927,13 +938,15 @@ body.theme-light .achievement-icon.blank {
   cursor: pointer;
 }
 
-/* Centre-align the "Unlocked" (col 4) and "DLC" (col 5) columns */
+/* Centre-align the "Unlocked" (col 4) and "DLC" (col 5) columns.
+   justify-self:stretch fills the full cell so text-align:center works. */
 .achievement-list.table-mode .achievement-table-header > :nth-child(4),
 .achievement-list.table-mode .achievement-table-header > :nth-child(5) {
-  justify-self: center;
+  justify-self: stretch;
   text-align: center;
 }
 
+.achievement-list.table-mode .achievement-row > :nth-child(4),
 .achievement-list.table-mode .achievement-row > :nth-child(5) {
   text-align: center;
 }
