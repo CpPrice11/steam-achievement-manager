@@ -79,15 +79,18 @@ input:disabled { cursor: wait; opacity: 0.55; }
 /* ─── Inputs & selects ───────────────────────────────────────────── */
 input, select {
   min-width: 0;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(42, 71, 94, 0.7);
   border-radius: 3px;
-  background: var(--input-bg);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--text);
   outline: none;
-  transition: border-color 0.12s;
+  transition: border-color 0.12s, background 0.12s;
 }
 
-input:focus, select:focus { border-color: var(--accent); }
+input:focus, select:focus {
+  border-color: var(--accent);
+  background: rgba(0, 0, 0, 0.3);
+}
 
 body.theme-light input,
 body.theme-light select { background: #ffffff; }
@@ -149,17 +152,17 @@ body.theme-light .sidebar { background: #b8cfe0; }
 
 .sidebar-controls {
   display: grid;
-  gap: 7px;
-  padding: 8px 10px 7px;
+  gap: 6px;
+  padding: 8px 8px 7px;
   border-bottom: 1px solid rgba(42, 71, 94, 0.4);
 }
 
 .field {
   display: grid;
-  gap: 5px;
+  gap: 3px;
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -168,44 +171,69 @@ body.theme-light .sidebar { background: #b8cfe0; }
 .toggle-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   color: var(--muted);
   font-size: 12px;
+  padding: 1px 0;
 }
 
 .toggle-field input {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   accent-color: var(--accent);
+  flex-shrink: 0;
 }
 
 .field input,
 .field select,
 .panel-head input {
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 8px;
+}
+
+/* ─── Search with icon ───────────────────────────────────────────── */
+#gameSearch {
+  padding-left: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f98a0' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 13px;
+  background-position: 8px center;
+}
+
+.field select {
+  appearance: auto;
+  cursor: pointer;
 }
 
 .sidebar-meta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  padding-top: 1px;
 }
 
 .game-count {
   color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .sidebar-action {
-  height: 28px;
-  padding: 0 10px;
+  height: 24px;
+  padding: 0 8px;
   color: var(--muted);
   font-size: 11px;
+  background: transparent;
+  border-color: rgba(42, 71, 94, 0.5);
+}
+
+.sidebar-action:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(103, 193, 245, 0.08);
+  border-color: var(--line);
 }
 
 /* ─── Game list ──────────────────────────────────────────────────── */
@@ -340,9 +368,17 @@ body.theme-light .game-icon { background: #c8dae8; }
 
 .toolbar h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  color: #e8edf2;
+  letter-spacing: -0.01em;
+}
+
+.brand p, .eyebrow {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
 .settings {
