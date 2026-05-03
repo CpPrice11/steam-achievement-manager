@@ -16,20 +16,24 @@ Compact Windows desktop manager for Steam achievements and game stats.
 
 - Windows.
 - Steam client running and logged in.
-- Node.js and npm for development.
-- Network access for `npm install`; optional network access at runtime for Steam Web API schema metadata.
 
-## Setup
+## Install
+
+Download the latest build from the [**Releases page**](https://github.com/CpPrice11/steam-achievement-manager/releases/latest):
+
+- **`Steam Achievement Manager Setup X.Y.Z.exe`** — installer with a setup wizard. Creates a Start Menu shortcut and uninstalls cleanly via "Apps & features". Recommended for most users.
+- **`Steam Achievement Manager X.Y.Z.exe`** — portable build. No installation, just download and run.
+
+Both builds are self-contained and do not require Node.js, npm, or any other dependencies.
+
+## Build from source
+
+For development or building your own executable, you need Node.js and npm.
 
 ```powershell
 npm install
-npm run start
-```
-
-Build a portable Windows executable:
-
-```powershell
-npm run dist
+npm run start    # run in development mode
+npm run dist     # build portable + NSIS installer into dist/
 ```
 
 ## Notes

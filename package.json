@@ -5,9 +5,10 @@
   "main": "src/main.js",
   "private": true,
   "type": "commonjs",
+  "author": "CpPrice11",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable",
+    "dist": "electron-builder --win",
     "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/steam-library.js && node --check src/steam-worker.js && node --check src/schema.js && node --check src/dlc-classifier.js"
   },
   "dependencies": {
@@ -33,8 +34,14 @@
     "win": {
       "icon": "assets/app-icon.ico",
       "target": [
+        "nsis",
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
     }
   }
 }
