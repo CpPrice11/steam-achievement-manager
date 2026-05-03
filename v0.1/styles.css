@@ -4,7 +4,7 @@
   --bg:         #1b2838;
   --panel:      #16202d;
   --panel-2:    #1e2837;
-  --sidebar-bg: #171a21;
+  --sidebar-bg: #1b2838;
   --input-bg:   #131e2b;
   --line:       #2a475e;
   --text:       #c6d4df;
@@ -105,7 +105,7 @@ body.theme-light select { background: #ffffff; }
   grid-template-rows: auto auto 1fr;
   min-height: 0;
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--line);
+  border-right: 1px solid rgba(42, 71, 94, 0.5);
 }
 
 body.theme-light .sidebar { background: #b8cfe0; }
@@ -151,7 +151,7 @@ body.theme-light .sidebar { background: #b8cfe0; }
   display: grid;
   gap: 7px;
   padding: 8px 10px 7px;
-  border-bottom: 1px solid rgba(42, 71, 94, 0.6);
+  border-bottom: 1px solid rgba(42, 71, 94, 0.4);
 }
 
 .field {
@@ -218,11 +218,11 @@ body.theme-light .sidebar { background: #b8cfe0; }
 
 .game-item {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 5px 14px 5px 12px;
+  padding: 4px 12px 4px 10px;
   text-align: left;
   border: none;
   border-left: 2px solid transparent;
@@ -259,8 +259,8 @@ body.theme-light .game-item.active { background: #d4e9f7; }
 .game-icon {
   display: inline-grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 2px;
   object-fit: cover;
   background: #0f1923;
@@ -290,15 +290,30 @@ body.theme-light .game-icon { background: #c8dae8; }
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  min-width: 50px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.game-item:hover small,
+.game-item.active small {
+  opacity: 1;
+}
+
+.game-appid {
+  display: none;
+}
+
+.game-item:hover .game-appid {
+  display: inline;
 }
 
 .game-mark {
-  color: var(--muted);
-  font-size: 10px;
+  color: var(--accent);
+  font-size: 7px;
+  opacity: 0.7;
   line-height: 1;
 }
 
@@ -982,7 +997,7 @@ body.compact-mode .brand { padding: 9px 12px; }
 body.compact-mode .brand h1 { font-size: 12px; }
 body.compact-mode .sidebar-controls { padding: 7px 8px 6px; gap: 6px; }
 body.compact-mode .game-list { padding: 2px 0 8px; }
-body.compact-mode .game-item { padding: 4px 12px 4px 10px; }
+body.compact-mode .game-item { padding: 3px 10px 3px 8px; }
 body.compact-mode .game-icon { width: 16px; height: 16px; }
 body.compact-mode .toolbar { padding: 9px 16px; }
 body.compact-mode .toolbar h2 { font-size: 17px; }
