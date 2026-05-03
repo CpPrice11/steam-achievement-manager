@@ -929,7 +929,7 @@ function renderAchievements() {
       ? (achievement.sourceAppName || `DLC ${achievement.sourceAppId || achievement.appId}`)
       : '';
     const row = document.createElement('label');
-    row.className = `achievement-row ${isPending ? 'pending' : ''} ${isProtected ? 'protected' : ''}`;
+    row.className = `achievement-row ${draftAchieved ? 'achieved' : ''} ${isPending ? 'pending' : ''} ${isProtected ? 'protected' : ''}`;
 
     const iconUrls = getAchievementIconUrls(achievement, draftAchieved);
     const image = iconUrls.length
