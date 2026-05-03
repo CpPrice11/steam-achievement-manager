@@ -28,7 +28,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     title: 'Steam Achievement Manager',
-    icon: path.join(__dirname, '..', 'assets', 'app-icon.ico'),
+    icon: path.join(__dirname, 'assets', 'app-icon.ico'),
     backgroundColor: '#101216',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -130,15 +130,17 @@ function runSteamWorker(payload) {
   });
 }
 
+const appRoot = path.join(__dirname, '..');
+
 function getUnpackedPath(...parts) {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', ...parts);
   }
-  return path.join(__dirname, '..', ...parts);
+  return path.join(appRoot, ...parts);
 }
 
 function getSteamFlatHelperPath() {
-  return getUnpackedPath('helpers', 'steam-flat-helper.ps1');
+  return getUnpackedPath('Source', 'helpers', 'steam-flat-helper.ps1');
 }
 
 function getSteamApiDllPath() {

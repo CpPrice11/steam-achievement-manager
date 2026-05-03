@@ -25,16 +25,14 @@
     "productName": "Steam Achievement Manager",
     "files": [
       "Source/**/*",
-      "assets/**/*",
-      "helpers/**/*",
       "package.json"
     ],
     "asarUnpack": [
       "node_modules/steamworks.js/**/*",
-      "helpers/**/*"
+      "Source/helpers/**/*"
     ],
     "win": {
-      "icon": "assets/app-icon.ico"
+      "icon": "Source/assets/app-icon.ico"
     },
     "nsis": {
       "oneClick": false,
