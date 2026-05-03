@@ -2,15 +2,15 @@
 :root {
   color-scheme: dark;
   --bg:         #1b2838;
-  --panel:      #16202d;
-  --panel-2:    #1e2837;
-  --sidebar-bg: #1b2838;
-  --input-bg:   #131e2b;
+  --panel:      #1e2a38;
+  --panel-2:    #2a475e;
+  --sidebar-bg: #171a21;
+  --input-bg:   #1b2838;
   --line:       #2a475e;
-  --text:       #c6d4df;
-  --muted:      #8f98a0;
-  --accent:     #1a9fff;
-  --accent-dim: rgba(26, 159, 255, 0.15);
+  --text:       #c7d5e0;
+  --muted:      #8ba3b5;
+  --accent:     #66c0f4;
+  --accent-dim: rgba(102, 192, 244, 0.12);
   --accent-2:   #5ba32b;
   --danger:     #e05252;
   --warning:    #c5962a;
@@ -21,7 +21,7 @@ body.theme-light {
   --bg:         #dfe3e6;
   --panel:      #ffffff;
   --panel-2:    #eef1f5;
-  --sidebar-bg: #c6d4df;
+  --sidebar-bg: #c7d5e0;
   --input-bg:   #ffffff;
   --line:       #9ab2c5;
   --text:       #1b2838;
@@ -61,14 +61,14 @@ button, input, select { font: inherit; }
 button {
   border: 1px solid var(--line);
   border-radius: 3px;
-  background: rgba(103, 193, 245, 0.08);
+  background: rgba(102, 192, 244, 0.08);
   color: var(--text);
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 
 button:hover:not(:disabled) {
-  background: rgba(103, 193, 245, 0.18);
+  background: rgba(102, 192, 244, 0.18);
   border-color: var(--accent);
   color: #ffffff;
 }
@@ -146,7 +146,7 @@ body.theme-light .sidebar { background: #b8cfe0; }
 }
 
 #refreshButton:hover:not(:disabled) {
-  background: rgba(103,193,245,0.12);
+  background: rgba(102, 192, 244, 0.12);
   border-color: var(--line);
 }
 
@@ -232,7 +232,7 @@ body.theme-light .sidebar { background: #b8cfe0; }
 
 .sidebar-action:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(103, 193, 245, 0.08);
+  background: rgba(102, 192, 244, 0.08);
   border-color: var(--line);
 }
 
@@ -264,7 +264,7 @@ body.theme-light .sidebar { background: #b8cfe0; }
 }
 
 .game-item.active {
-  background: rgba(26, 159, 255, 0.12);
+  background: #2a475e;
   border-left-color: var(--accent);
 }
 
@@ -298,8 +298,8 @@ body.theme-light .game-item.active { background: #d4e9f7; }
 
 .game-icon.placeholder {
   background: linear-gradient(135deg,
-    rgba(26,159,255,0.15),
-    rgba(91,163,43,0.08)),
+    rgba(102, 192, 244, 0.12),
+    rgba(91, 163, 43, 0.06)),
     #0f1923;
 }
 
@@ -497,9 +497,9 @@ body.theme-light .game-icon { background: #c8dae8; }
   gap: 10px;
   margin: 8px 18px 0;
   padding: 7px 12px;
-  border: 1px solid rgba(26, 159, 255, 0.35);
+  border: 1px solid rgba(102, 192, 244, 0.35);
   border-radius: 3px;
-  background: rgba(26, 159, 255, 0.07);
+  background: rgba(102, 192, 244, 0.07);
   color: var(--text);
   font-size: 12px;
 }
@@ -514,7 +514,7 @@ body.theme-light .game-icon { background: #c8dae8; }
   width: 14px;
   height: 14px;
   margin-top: 2px;
-  border: 2px solid rgba(26, 159, 255, 0.25);
+  border: 2px solid rgba(102, 192, 244, 0.25);
   border-top-color: var(--accent);
   border-radius: 999px;
   animation: loading-spin 0.7s linear infinite;
@@ -548,7 +548,7 @@ body.theme-light .game-icon { background: #c8dae8; }
 
 .tab:hover:not(:disabled):not(.active) {
   color: var(--text);
-  background: rgba(103, 193, 245, 0.05);
+  background: rgba(102, 192, 244, 0.05);
   border-color: transparent;
 }
 
@@ -673,7 +673,7 @@ body.theme-light .progress-track { background: #d8e5ed; }
   min-width: 16px;
   padding: 1px 5px;
   border-radius: 999px;
-  background: rgba(103, 193, 245, 0.08);
+  background: rgba(102, 192, 244, 0.08);
   color: var(--muted);
   font-size: 10px;
   font-weight: 700;
@@ -687,7 +687,7 @@ body.theme-light .progress-track { background: #d8e5ed; }
 }
 
 .filter-chip.active strong, .source-chip.active strong {
-  background: rgba(26, 159, 255, 0.25);
+  background: rgba(102, 192, 244, 0.25);
   color: var(--text);
 }
 
@@ -695,7 +695,7 @@ body.theme-light .progress-track { background: #d8e5ed; }
 
 .filter-chip:not(:disabled):hover,
 .source-chip:not(:disabled):hover {
-  border-color: rgba(26, 159, 255, 0.35);
+  border-color: rgba(102, 192, 244, 0.35);
   color: var(--text);
 }
 
@@ -713,12 +713,12 @@ body.theme-light .progress-track { background: #d8e5ed; }
 }
 
 .bulk-button.unlock { border-color: rgba(91, 163, 43, 0.5); }
-.bulk-button.lock   { border-color: rgba(103, 193, 245, 0.35); }
-.bulk-button.apply  { border-color: rgba(26, 159, 255, 0.6); }
-.bulk-button.cancel { border-color: rgba(103, 193, 245, 0.25); }
+.bulk-button.lock   { border-color: rgba(102, 192, 244, 0.35); }
+.bulk-button.apply  { border-color: rgba(102, 192, 244, 0.6); }
+.bulk-button.cancel { border-color: rgba(102, 192, 244, 0.25); }
 
 .bulk-button.unlock:hover:not(:disabled) { border-color: var(--accent-2); background: rgba(91,163,43,0.15); }
-.bulk-button.apply:hover:not(:disabled)  { border-color: var(--accent);   background: rgba(26,159,255,0.18); }
+.bulk-button.apply:hover:not(:disabled)  { border-color: var(--accent);   background: rgba(102, 192, 244, 0.18); }
 
 .bulk-icon {
   display: block;
@@ -771,12 +771,12 @@ body.theme-light .progress-track { background: #d8e5ed; }
 }
 
 .achievement-row:not(.achieved):not(.pending):hover {
-  background: rgba(103, 193, 245, 0.03);
+  background: rgba(102, 192, 244, 0.03);
 }
 
 /* Pending change highlight */
 .achievement-row.pending {
-  background: rgba(26, 159, 255, 0.07);
+  background: rgba(102, 192, 244, 0.07);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -808,8 +808,8 @@ body.theme-light .progress-track { background: #d8e5ed; }
   position: relative;
   border: 1px solid var(--line);
   background: linear-gradient(135deg,
-    rgba(26,159,255,0.08),
-    rgba(103,193,245,0.03)),
+    rgba(102, 192, 244, 0.08),
+    rgba(102, 192, 244, 0.03)),
     var(--input-bg);
   color: var(--muted);
 }
@@ -946,7 +946,7 @@ body.theme-light .achievement-icon.blank {
 
 /* ─── Stats ──────────────────────────────────────────────────────── */
 .stats-control-deck .diagnostics-card {
-  background: rgba(103, 193, 245, 0.03);
+  background: rgba(102, 192, 244, 0.03);
 }
 
 .stat-row {
@@ -1007,7 +1007,7 @@ body.theme-light .achievement-icon.blank {
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 3px;
-  background: rgba(103, 193, 245, 0.04);
+  background: rgba(102, 192, 244, 0.04);
 }
 
 .diagnostics-grid strong { overflow-wrap: anywhere; font-size: 11px; }
