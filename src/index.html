@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Steam Achievement Manager</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar">
+        <header class="brand">
+          <div>
+            <h1>Steam Achievement Manager</h1>
+            <p id="steamStatus">Steam: перевірка...</p>
+          </div>
+          <button id="refreshButton" title="Оновити">↻</button>
+        </header>
+
+        <div class="sidebar-controls">
+          <label class="field">
+            <span>Пошук гри</span>
+            <input id="gameSearch" type="search" autocomplete="off" placeholder="Назва або AppID" />
+          </label>
+          <label class="toggle-field">
+            <input id="gamesWithAchievementsOnly" type="checkbox" />
+            <span>Тільки ігри з досягненнями</span>
+          </label>
+          <label class="field compact-field">
+            <span>Ризик</span>
+            <select id="gameRiskFilter">
+              <option value="all">Усі ігри</option>
+              <option value="safe">Без позначки ризику</option>
+              <option value="risky">Тільки ризикові</option>
+            </select>
+          </label>
+          <label class="field compact-field">
+            <span id="gameSortLabel">Сортування</span>
+            <select id="gameSort">
+              <option value="name">Назва A-Z</option>
+              <option value="appid">AppID</option>
+              <option value="achievements-first">З досягненнями спочатку</option>
+              <option value="risk-first">Ризикові спочатку</option>
+              <option value="issues-first">Проблемні спочатку</option>
+            </select>
+          </label>
+          <div class="sidebar-meta">
+            <div id="gameCount" class="game-count">0 ігор</div>
+            <button id="libraryDiagnosticsButton" class="sidebar-action" title="Перевірити назви, іконки, DLC і Steam-блокування">Перевірити бібліотеку</button>
+          </div>
+        </div>
+        <div id="gameList" class="game-list"></div>
+      </aside>
+
+      <section class="content">
+        <div class="toolbar">
+          <div>
+            <p class="eyebrow" id="selectedAppId">Гру не вибрано</p>
+            <h2 id="selectedGame">Оберіть гру</h2>
+          </div>
+          <div class="settings">
+            <button id="openSteamButton" title="Відкрити сторінку гри в Steam" disabled>Steam</button>
+            <button id="refreshGameButton" title="Оновити тільки поточну гру" disabled>↻ Гра</button>
+            <input id="apiKeyInput" type="password" placeholder="Steam Web API key" title="Опційний Steam Web API key" />
+            <button id="appearanceSettingsButton" class="icon-button" title="Налаштування вигляду" aria-label="Налаштування вигляду">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"></path>
+                <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 0 1-2.97 2.97l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V21.5a2.1 2.1 0 0 1-4.2 0v-.09a1.8 1.8 0 0 0-1.09-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 0 1-2.97-2.97l.06-.06a1.8 1.8 0 0 0 .36-1.98 1.8 1.8 0 0 0-1.65-1.09H2.5a2.1 2.1 0 0 1 0-4.2h.09a1.8 1.8 0 0 0 1.65-1.09 1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 0 1 2.97-2.97l.06.06a1.8 1.8 0 0 0 1.98.36h.01A1.8 1.8 0 0 0 9.9 2.5v-.09a2.1 2.1 0 0 1 4.2 0v.09a1.8 1.8 0 0 0 1.09 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 0 1 2.97 2.97l-.06.06a1.8 1.8 0 0 0-.36 1.98v.01a1.8 1.8 0 0 0 1.65 1.09h.09a2.1 2.1 0 0 1 0 4.2h-.09A1.8 1.8 0 0 0 19.4 15Z"></path>
+              </svg>
+            </button>
+            <button id="saveSettingsButton">Зберегти</button>
+          </div>
+          <div id="appearancePanel" class="appearance-panel hidden">
+            <label>
+              <span id="uiLanguageLabel">Мова програми</span>
+              <select id="languageInput" title="Мова інтерфейсу програми">
+                <option value="ukrainian">Українська</option>
+                <option value="english">English</option>
+              </select>
+            </label>
+            <label>
+              <span id="themeLabel">Тема</span>
+              <select id="themeInput">
+                <option value="dark">Темна</option>
+                <option value="light">Світла</option>
+                <option value="system">Як у Windows</option>
+              </select>
+            </label>
+            <label>
+              <span id="uiScaleLabel">Розмір інтерфейсу</span>
+              <select id="uiScaleInput">
+                <option value="compact">Компактний</option>
+                <option value="normal">Звичайний</option>
+                <option value="large">Більший</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div id="notice" class="notice hidden"></div>
+        <div id="loadingIndicator" class="loading-indicator hidden" role="status" aria-live="polite">
+          <span class="loading-spinner" aria-hidden="true"></span>
+          <span class="loading-copy">
+            <strong id="loadingText">Завантаження...</strong>
+            <small id="loadingDetail"></small>
+          </span>
+        </div>
+
+        <nav class="tabs">
+          <button class="tab active" data-tab="achievements">Досягнення</button>
+          <button class="tab" data-tab="stats">Додатково</button>
+          <button class="tab" data-tab="history">Історія</button>
+        </nav>
+
+        <section id="achievementsPanel" class="panel active">
+          <div class="achievement-control-deck">
+            <div id="progressSummary" class="progress-summary hidden">
+              <div>
+                <strong id="progressText">0 / 0 розблоковано</strong>
+                <span id="progressPercent">0%</span>
+              </div>
+              <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+            </div>
+            <div class="panel-head">
+              <input id="achievementSearch" type="search" placeholder="Фільтр досягнень" />
+              <select id="achievementSort" title="Сортування досягнень" hidden aria-hidden="true" tabindex="-1">
+                <option value="default">Як у Steam</option>
+                <option value="name">Назва A-Z</option>
+                <option value="locked-first">Заблоковані спочатку</option>
+                <option value="unlocked-first">Розблоковані спочатку</option>
+                <option value="changed-first">Змінені спочатку</option>
+                <option value="hidden-first">Приховані спочатку</option>
+                <option value="dlc-first">DLC спочатку</option>
+                <option value="base-first">Основна гра спочатку</option>
+                <option value="unlock-time-desc">Новіші розблокування</option>
+                <option value="unlock-time-asc">Старіші розблокування</option>
+              </select>
+              <div class="bulk-actions">
+                <button id="unlockAllButton" class="bulk-button unlock" title="Розблокувати всі досягнення" aria-label="Розблокувати всі досягнення" disabled>
+                  <svg class="bulk-icon unlock-icon" aria-hidden="true" viewBox="0 0 24 24">
+                    <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                    <path d="M8 10V7a4 4 0 0 1 7.6-1.8"></path>
+                    <path d="M12 14v3"></path>
+                  </svg>
+                </button>
+                <button id="lockAllButton" class="bulk-button lock" title="Заблокувати всі досягнення" aria-label="Заблокувати всі досягнення" disabled>
+                  <svg class="bulk-icon lock-icon" aria-hidden="true" viewBox="0 0 24 24">
+                    <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                    <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                    <path d="M12 14v3"></path>
+                  </svg>
+                </button>
+                <button id="applyAchievementChangesButton" class="bulk-button apply" title="Підтвердити зміни" aria-label="Підтвердити зміни" disabled>
+                  <svg class="bulk-icon apply-icon" aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                </button>
+                <button id="cancelPendingChangesButton" class="bulk-button cancel" title="Скасувати підготовлені зміни" aria-label="Скасувати підготовлені зміни" disabled>
+                  <svg class="bulk-icon cancel-icon" aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              <span id="achievementCount">0</span>
+            </div>
+          </div>
+          <div id="achievementList" class="achievement-list empty-state">Оберіть гру, щоб завантажити досягнення.</div>
+        </section>
+
+        <section id="statsPanel" class="panel">
+          <div class="stats-control-deck">
+            <div id="gameDiagnostics" class="diagnostics-card empty-state">Оберіть гру, щоб побачити діагностику.</div>
+            <div class="panel-head">
+              <button id="loadStatsButton">Завантажити статистику</button>
+              <button id="resetStatsButton">Скинути статистику</button>
+              <button id="steamworksDiagnosticsButton">Steamworks</button>
+              <span id="statsCount">0</span>
+            </div>
+            <div class="panel-head stats-filter-head">
+              <input id="statsSearch" type="search" placeholder="Фільтр статистики" />
+              <select id="statsTypeFilter">
+                <option value="all">Уся статистика</option>
+                <option value="editable">Змінювана</option>
+                <option value="readonly">Тільки читання</option>
+                <option value="unsupported">Не підтримується</option>
+              </select>
+            </div>
+          </div>
+          <div id="statsList" class="stats-list empty-state">Статистика з'явиться, якщо Steam повертає schema для гри.</div>
+        </section>
+
+        <section id="historyPanel" class="panel">
+          <div class="panel-head compact">
+            <button id="refreshHistoryButton">Оновити історію</button>
+            <button id="openBackupsFolderButton">Відкрити папку backup</button>
+            <span id="historyCount">0</span>
+          </div>
+          <div id="historyList" class="history-list empty-state">Історія змін поки порожня.</div>
+        </section>
+      </section>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

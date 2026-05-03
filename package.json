@@ -1,0 +1,40 @@
+{
+  "name": "my-sam",
+  "version": "0.1.0",
+  "description": "Compact Windows desktop Steam achievement and stats manager.",
+  "main": "src/main.js",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/steam-library.js && node --check src/steam-worker.js && node --check src/schema.js && node --check src/dlc-classifier.js"
+  },
+  "dependencies": {
+    "steamworks.js": "^0.4.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "local.my-sam",
+    "productName": "Steam Achievement Manager",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "helpers/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**/*",
+      "helpers/**/*"
+    ],
+    "win": {
+      "icon": "assets/app-icon.ico",
+      "target": [
+        "portable"
+      ]
+    }
+  }
+}
