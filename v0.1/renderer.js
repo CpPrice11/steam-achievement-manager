@@ -701,6 +701,13 @@ function sortAchievements(achievements) {
     const right = isDlcAchievement(b) ? 1 : 0;
     return left - right || byOriginalOrder(a, b);
   };
+  // Sort alphabetically by DLC source name (base-game '' sorts first when asc)
+  const byDlcName = (dir) => (a, b) => {
+    const labelA = isDlcAchievement(a) ? String(a.sourceAppName || `DLC ${a.sourceAppId || a.appId}`) : '';
+    const labelB = isDlcAchievement(b) ? String(b.sourceAppName || `DLC ${b.sourceAppId || b.appId}`) : '';
+    const cmp = labelA.localeCompare(labelB);
+    return dir === 'asc' ? cmp || byOriginalOrder(a, b) : -cmp || byOriginalOrder(a, b);
+  };
   const byUnlockTime = (direction) => (a, b) => {
     const left = Number(a.unlockTime || 0);
     const right = Number(b.unlockTime || 0);
@@ -720,6 +727,8 @@ function sortAchievements(achievements) {
   if (state.achievementSort === 'name') sorted.sort(byName);
   if (state.achievementSort === 'dlc-first') sorted.sort(byDlc);
   if (state.achievementSort === 'base-first') sorted.sort(byBase);
+  if (state.achievementSort === 'dlc-name-asc')  sorted.sort(byDlcName('asc'));
+  if (state.achievementSort === 'dlc-name-desc') sorted.sort(byDlcName('desc'));
   if (state.achievementSort === 'unlock-time-desc') sorted.sort(byUnlockTime('desc'));
   if (state.achievementSort === 'unlock-time-asc') sorted.sort(byUnlockTime('asc'));
   if (state.achievementSort === 'locked-first') sorted.sort(byDraftState(false));
@@ -812,9 +821,9 @@ function getTableSortState(sort) {
   }
   if (sort === 'dlc-first') {
     return {
-      active: state.achievementSort === 'dlc-first' || state.achievementSort === 'base-first',
-      direction: state.achievementSort === 'base-first' ? 'asc' : 'desc',
-      next: state.achievementSort === 'dlc-first' ? 'base-first' : 'dlc-first',
+      active: state.achievementSort === 'dlc-name-asc' || state.achievementSort === 'dlc-name-desc',
+      direction: state.achievementSort === 'dlc-name-asc' ? 'asc' : 'desc',
+      next: state.achievementSort === 'dlc-name-asc' ? 'dlc-name-desc' : 'dlc-name-asc',
     };
   }
   if (sort === 'unlock-time-desc') {
