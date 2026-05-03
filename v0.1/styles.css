@@ -342,7 +342,8 @@ body.theme-light .game-icon { background: #c8dae8; }
   padding: 0 10px;
 }
 
-.icon-button {
+.icon-button,
+.settings .icon-button {
   display: inline-grid;
   place-items: center;
   width: 32px;
