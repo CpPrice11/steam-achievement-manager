@@ -140,7 +140,7 @@ function getUnpackedPath(...parts) {
 }
 
 function getSteamFlatHelperPath() {
-  return getUnpackedPath('Source', 'helpers', 'steam-flat-helper.ps1');
+  return getUnpackedPath('v0.1', 'helpers', 'steam-flat-helper.ps1');
 }
 
 function getSteamApiDllPath() {
