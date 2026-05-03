@@ -2,14 +2,16 @@
   "name": "my-sam",
   "version": "0.1.0",
   "description": "Compact Windows desktop Steam achievement and stats manager.",
-  "main": "src/main.js",
+  "main": "Source/main.js",
   "private": true,
   "type": "commonjs",
   "author": "CpPrice11",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/steam-library.js && node --check src/steam-worker.js && node --check src/schema.js && node --check src/dlc-classifier.js"
+    "dist:setup": "electron-builder --win nsis --config.directories.output=Setup",
+    "dist:portable": "electron-builder --win portable --config.directories.output=Portable",
+    "dist": "npm run dist:setup && npm run dist:portable",
+    "check": "node --check Source/main.js && node --check Source/preload.js && node --check Source/renderer.js && node --check Source/steam-library.js && node --check Source/steam-worker.js && node --check Source/schema.js && node --check Source/dlc-classifier.js"
   },
   "dependencies": {
     "steamworks.js": "^0.4.0"
@@ -22,7 +24,7 @@
     "appId": "local.my-sam",
     "productName": "Steam Achievement Manager",
     "files": [
-      "src/**/*",
+      "Source/**/*",
       "assets/**/*",
       "helpers/**/*",
       "package.json"
@@ -32,11 +34,7 @@
       "helpers/**/*"
     ],
     "win": {
-      "icon": "assets/app-icon.ico",
-      "target": [
-        "nsis",
-        "portable"
-      ]
+      "icon": "assets/app-icon.ico"
     },
     "nsis": {
       "oneClick": false,
