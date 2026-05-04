@@ -41,6 +41,7 @@ const state = {
   statsFilter: '',
   statsTypeFilter: 'all',
   steamworksDiagnostics: null,
+  selectedKeys: new Set(),
 };
 
 function setAchievementsState(next) {
@@ -115,6 +116,13 @@ const elements = {
   historyCount: document.querySelector('#historyCount'),
   gameBanner: document.querySelector('#gameBanner'),
   refreshGameLabel: document.querySelector('#refreshGameLabel'),
+  toastContainer: document.querySelector('#toastContainer'),
+  sidebar: document.querySelector('#sidebar'),
+  selectionBar: document.querySelector('#selectionBar'),
+  selectionCount: document.querySelector('#selectionCount'),
+  unlockSelectedButton: document.querySelector('#unlockSelectedButton'),
+  lockSelectedButton: document.querySelector('#lockSelectedButton'),
+  clearSelectionButton: document.querySelector('#clearSelectionButton'),
 };
 
 const RISKY_APP_IDS = new Set([
@@ -368,6 +376,36 @@ function showNotice(message, tone = 'info') {
   elements.notice.textContent = message;
   elements.notice.className = `notice ${tone}`;
   if (!message) elements.notice.classList.add('hidden');
+}
+
+function showToast(message, tone = 'info', durationMs = 4000) {
+  const container = elements.toastContainer;
+  if (!container) { showNotice(message, tone); return; }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${tone}`;
+  toast.innerHTML = `<span class="toast-message">${escapeHtml(message)}</span>`;
+
+  const bar = document.createElement('div');
+  bar.className = 'toast-progress';
+  bar.style.animation = `none`;
+  toast.append(bar);
+  container.append(toast);
+
+  // Animate progress bar shrink
+  requestAnimationFrame(() => {
+    bar.style.transition = `transform ${durationMs}ms linear`;
+    bar.style.transform = 'scaleX(0)';
+  });
+
+  const dismiss = () => {
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 230);
+  };
+
+  toast.addEventListener('click', dismiss);
+  const timer = setTimeout(dismiss, durationMs);
+  toast.addEventListener('click', () => clearTimeout(timer), { once: true });
 }
 
 function setLoading(message = '', detail = '') {
@@ -919,6 +957,7 @@ function renderAchievements() {
   elements.applyAchievementChangesButton.disabled = !state.selectedGame || pendingCount === 0;
   elements.cancelPendingChangesButton.disabled = pendingCount === 0;
   renderProgress();
+  renderSelectionBar();
   elements.achievementList.innerHTML = '';
 
   if (!achievements.length) {
@@ -964,7 +1003,21 @@ function renderAchievements() {
       ? (achievement.sourceAppName || `DLC ${achievement.sourceAppId || achievement.appId}`)
       : '';
     const row = document.createElement('label');
-    row.className = `achievement-row ${draftAchieved ? 'achieved' : ''} ${isPending ? 'pending' : ''} ${isProtected ? 'protected' : ''}`;
+    const isSelected = state.selectedKeys.has(getAchievementKey(achievement));
+    row.className = `achievement-row ${draftAchieved ? 'achieved' : ''} ${isPending ? 'pending' : ''} ${isProtected ? 'protected' : ''} ${isSelected ? 'selected' : ''}`;
+    row.addEventListener('click', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const key = getAchievementKey(achievement);
+      if (state.selectedKeys.has(key)) {
+        state.selectedKeys.delete(key);
+        row.classList.remove('selected');
+      } else {
+        state.selectedKeys.add(key);
+        row.classList.add('selected');
+      }
+      renderSelectionBar();
+    });
 
     const iconUrls = getAchievementIconUrls(achievement, draftAchieved);
     const image = iconUrls.length
@@ -1379,6 +1432,7 @@ function applyLoadedGameResult(result) {
 
 async function selectGame(game, { force = false } = {}) {
   state.selectedGame = game;
+  state.selectedKeys.clear();
   setAchievementsState([]);
   state.pendingAchievements.clear();
   state.statsSchema = [];
@@ -1433,6 +1487,47 @@ function cancelPendingChanges() {
   state.pendingAchievements.clear();
   renderAchievements();
   showNotice('Підготовлені зміни скасовано.');
+}
+
+function clearSelection() {
+  state.selectedKeys.clear();
+  document.querySelectorAll('.achievement-row.selected').forEach((r) => r.classList.remove('selected'));
+  renderSelectionBar();
+}
+
+function renderSelectionBar() {
+  const count = state.selectedKeys.size;
+  if (!elements.selectionBar) return;
+  elements.selectionBar.classList.toggle('hidden', count === 0);
+  if (!count) return;
+  const lang = getUiLanguage();
+  elements.selectionCount.textContent = lang === 'english' ? `${count} selected` : `Вибрано: ${count}`;
+  if (elements.unlockSelectedButton) elements.unlockSelectedButton.textContent = lang === 'english' ? 'Unlock' : 'Розблокувати';
+  if (elements.lockSelectedButton) elements.lockSelectedButton.textContent = lang === 'english' ? 'Lock' : 'Заблокувати';
+}
+
+function setSelectedAchievements(achieved) {
+  const selected = state.achievements.filter((a) => state.selectedKeys.has(getAchievementKey(a)));
+  const editable = selected.filter((a) => !isAchievementChangeProtected(a));
+  if (!editable.length) {
+    showToast(
+      getUiLanguage() === 'english'
+        ? 'None of the selected achievements can be changed.'
+        : 'Жодне з вибраних досягнень не можна змінити.',
+      'warning'
+    );
+    return;
+  }
+  for (const achievement of editable) {
+    setPendingAchievement(achievement, achieved);
+  }
+  clearSelection();
+  renderAchievements();
+  showNotice(
+    getUiLanguage() === 'english'
+      ? `${editable.length} achievements queued. Press ✓ to apply.`
+      : `${editable.length} досягнень у черзі. Натисніть ✓, щоб підтвердити.`
+  );
 }
 
 function queueAchievementChange(achievement, achieved) {
@@ -1726,9 +1821,9 @@ async function applyAchievementChanges() {
 
     if (failed.length) {
       const details = formatFailureDetails(failed);
-      showNotice(`Готово частково: застосовано ${changed.length}, не вдалося застосувати ${failed.length}. ${details} Backup: ${backup.path}`, 'warning');
+      showToast(`Готово частково: застосовано ${changed.length}, не вдалося застосувати ${failed.length}. ${details}`, 'warning', 6000);
     } else {
-      showNotice(`Зміни застосовано: ${changed.length}. Backup: ${backup.path}`, 'success');
+      showToast(`Зміни застосовано: ${changed.length}. Backup збережено.`, 'success');
     }
   } catch (error) {
     showNotice(error.message, 'error');
@@ -1762,7 +1857,7 @@ async function runSteamworksDiagnostics() {
     state.steamworksDiagnostics = await window.sam.diagnoseSteamworks({
       appId: state.selectedGame.appId,
     });
-    showNotice(getUiLanguage() === 'english' ? 'Steamworks check completed.' : 'Перевірку Steamworks завершено.', 'success');
+    showToast(getUiLanguage() === 'english' ? 'Steamworks check completed.' : 'Перевірку Steamworks завершено.', 'success');
   } catch (error) {
     state.steamworksDiagnostics = { error: error.message };
     showNotice(error.message, 'error');
@@ -1782,7 +1877,7 @@ async function saveStat(name, type, value, button) {
       type,
       value,
     });
-    showNotice(`Статистику збережено: ${name}`, 'success');
+    showToast(`Статистику збережено: ${name}`, 'success');
     await loadStats();
   } catch (error) {
     showNotice(error.message, 'error');
@@ -1803,7 +1898,7 @@ async function resetStats() {
   setBusy(elements.resetStatsButton, true);
   try {
     await window.sam.resetStats({ appId: state.selectedGame.appId });
-    showNotice(getUiLanguage() === 'english' ? 'Stats reset. Reloading current values...' : 'Статистику скинуто. Оновлюю поточні значення...', 'success');
+    showToast(getUiLanguage() === 'english' ? 'Stats reset.' : 'Статистику скинуто.', 'success');
     await loadStats();
   } catch (error) {
     showNotice(error.message, 'error');
@@ -1826,7 +1921,7 @@ async function saveSettings({ silent = false } = {}) {
     });
     applyAppearance();
     applyUiLanguage();
-    if (!silent) showNotice(state.activeProfileId ? 'Налаштування збережено для поточного Steam-акаунта.' : 'Налаштування збережено.', 'success');
+    if (!silent) showToast(state.activeProfileId ? 'Налаштування збережено для поточного Steam-акаунта.' : 'Налаштування збережено.', 'success');
   } catch (error) {
     showNotice(error.message, 'error');
   } finally {
@@ -1937,6 +2032,9 @@ elements.openBackupsFolderButton.addEventListener('click', openBackupsFolder);
 elements.saveSettingsButton.addEventListener('click', saveSettings);
 elements.languageInput.addEventListener('change', changeLanguage);
 elements.appearanceSettingsButton.addEventListener('click', toggleAppearancePanel);
+elements.unlockSelectedButton?.addEventListener('click', () => setSelectedAchievements(true));
+elements.lockSelectedButton?.addEventListener('click', () => setSelectedAchievements(false));
+elements.clearSelectionButton?.addEventListener('click', clearSelection);
 elements.themeInput.addEventListener('change', () => {
   applyAppearance();
   saveSettings({ silent: true });
@@ -1949,6 +2047,98 @@ elements.uiScaleInput.addEventListener('change', () => {
 if (window.matchMedia) {
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyAppearance);
 }
+
+// ─── Keyboard shortcuts ──────────────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement?.tagName;
+  const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+  // Ctrl+Z — cancel pending changes (skip when typing)
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'z') {
+    if (!inInput && state.pendingAchievements.size > 0 && state.activeTab === 'achievements') {
+      e.preventDefault();
+      cancelPendingChanges();
+    }
+    return;
+  }
+
+  // Ctrl+Enter — apply pending changes
+  if (e.ctrlKey && e.key === 'Enter') {
+    if (!elements.applyAchievementChangesButton.disabled) {
+      e.preventDefault();
+      applyAchievementChanges();
+    }
+    return;
+  }
+
+  // Ctrl+F — focus search field
+  if (e.ctrlKey && e.key === 'f') {
+    e.preventDefault();
+    if (state.activeTab === 'achievements') {
+      elements.achievementSearch.focus();
+      elements.achievementSearch.select();
+    } else if (state.activeTab === 'stats') {
+      elements.statsSearch.focus();
+      elements.statsSearch.select();
+    } else if (state.activeTab === 'library') {
+      elements.gameSearch.focus();
+      elements.gameSearch.select();
+    }
+    return;
+  }
+
+  // Escape — clear selection, then close appearance panel
+  if (e.key === 'Escape') {
+    if (state.selectedKeys.size > 0) {
+      clearSelection();
+      return;
+    }
+    if (!elements.appearancePanel.classList.contains('hidden')) {
+      elements.appearancePanel.classList.add('hidden');
+    }
+  }
+});
+
+// ─── Sidebar resize ──────────────────────────────────────────────────────────
+(function initSidebarResize() {
+  const sidebar = elements.sidebar;
+  const resizer = document.querySelector('.sidebar-resizer');
+  if (!resizer || !sidebar) return;
+
+  const STORAGE_KEY = 'sam-sidebar-w';
+  const MIN_W = 190;
+  const MAX_W = 600;
+
+  function applyWidth(w) {
+    document.documentElement.style.setProperty('--sidebar-w', `${w}px`);
+  }
+
+  const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+  if (saved >= MIN_W && saved <= MAX_W) applyWidth(saved);
+
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebar.getBoundingClientRect().width;
+    let lastW = startW;
+    document.body.classList.add('sidebar-dragging');
+
+    function onMove(ev) {
+      lastW = Math.min(MAX_W, Math.max(MIN_W, startW + ev.clientX - startX));
+      applyWidth(lastW);
+    }
+
+    function onUp() {
+      document.body.classList.remove('sidebar-dragging');
+      localStorage.setItem(STORAGE_KEY, String(lastW));
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
 
 applyUiLanguage();
 loadStatusAndGames();

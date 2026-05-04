@@ -8,7 +8,7 @@
   </head>
   <body>
     <main class="app-shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <header class="brand">
           <div>
             <h1>Steam Achievement Manager</h1>
@@ -51,6 +51,8 @@
         </div>
         <div id="gameList" class="game-list"></div>
       </aside>
+
+      <div class="sidebar-resizer" aria-hidden="true" title="Перетягнути для зміни ширини"></div>
 
       <section class="content">
         <div class="toolbar">
@@ -175,6 +177,14 @@
               </div>
               <span id="achievementCount">0</span>
             </div>
+            <div id="selectionBar" class="selection-bar hidden">
+              <span id="selectionCount"></span>
+              <div class="selection-actions">
+                <button id="unlockSelectedButton" type="button"></button>
+                <button id="lockSelectedButton" type="button"></button>
+              </div>
+              <button id="clearSelectionButton" type="button" class="selection-clear" aria-label="Скасувати виділення">✕</button>
+            </div>
           </div>
           <div id="achievementList" class="achievement-list empty-state">Оберіть гру, щоб завантажити досягнення.</div>
         </section>
@@ -211,6 +221,7 @@
         </section>
       </section>
     </main>
+    <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="false"></div>
     <script src="./renderer.js"></script>
   </body>
 </html>

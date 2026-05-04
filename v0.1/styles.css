@@ -109,7 +109,7 @@ body.theme-light select option {
 /* ─── Layout ─────────────────────────────────────────────────────── */
 .app-shell {
   display: grid;
-  grid-template-columns: 312px 1fr;
+  grid-template-columns: var(--sidebar-w, 312px) 4px 1fr;
   height: 100vh;
 }
 
@@ -1148,10 +1148,10 @@ body.compact-mode .notice { margin-top: 6px; padding: 5px 10px; }
 
 /* ─── Scale variants ─────────────────────────────────────────────── */
 body.scale-normal { font-size: 14px; }
-body.scale-normal .app-shell { grid-template-columns: 330px 1fr; }
+body.scale-normal .app-shell { grid-template-columns: var(--sidebar-w, 330px) 4px 1fr; }
 
 body.scale-large { font-size: 15px; }
-body.scale-large .app-shell { grid-template-columns: 370px 1fr; }
+body.scale-large .app-shell { grid-template-columns: var(--sidebar-w, 370px) 4px 1fr; }
 body.scale-large .game-item { min-height: 42px; }
 body.scale-large .achievement-row { min-height: 72px; }
 body.scale-large .achievement-icon { width: 54px; height: 54px; }
@@ -1209,7 +1209,7 @@ body.scale-large .achievement-list.table-mode .achievement-row { min-height: 66p
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .app-shell { grid-template-columns: 250px 1fr; }
+  .app-shell { grid-template-columns: var(--sidebar-w, 250px) 4px 1fr; }
 
   .toolbar {
     align-items: stretch;
@@ -1222,4 +1222,160 @@ body.scale-large .achievement-list.table-mode .achievement-row { min-height: 66p
   .panel-head select { grid-column: 1 / -1; }
   .bulk-actions { grid-column: 1 / -1; }
   .diagnostics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ─── Sidebar resizer ────────────────────────────────────────────── */
+.sidebar-resizer {
+  position: relative;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  z-index: 10;
+  /* Widen the hit area with a centred pseudo-element */
+}
+
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  right: -5px;
+  cursor: col-resize;
+}
+
+.sidebar-resizer:hover,
+body.sidebar-dragging .sidebar-resizer {
+  background: rgba(102, 192, 244, 0.4);
+}
+
+body.sidebar-dragging {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+/* ─── Toast notifications ────────────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 440px;
+}
+
+.toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-radius: 4px;
+  background: #1e2d3e;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  cursor: pointer;
+  overflow: hidden;
+  animation: toast-enter 0.2s ease;
+}
+
+.toast.toast-exit { animation: toast-exit 0.22s ease forwards; }
+
+.toast.success { border-left-color: var(--accent-2); }
+.toast.error   { border-left-color: var(--danger); }
+.toast.warning { border-left-color: var(--warning); }
+.toast.info    { border-left-color: var(--accent); }
+
+body.theme-light .toast { background: #f0f4f8; }
+
+.toast-message { flex: 1; }
+
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.3;
+  transform-origin: left;
+}
+
+@keyframes toast-enter {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes toast-exit {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+
+/* ─── Selection bar ──────────────────────────────────────────────── */
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  background: rgba(102, 192, 244, 0.08);
+  border: 1px solid rgba(102, 192, 244, 0.22);
+  border-radius: 4px;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.selection-bar.hidden { display: none; }
+
+#selectionCount {
+  flex: 1;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.selection-actions { display: flex; gap: 5px; }
+
+.selection-actions button {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.selection-clear {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.selection-clear:hover:not(:disabled) {
+  background: rgba(102, 192, 244, 0.12);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+/* ─── Selected achievement row ───────────────────────────────────── */
+.achievement-row.selected {
+  background: rgba(102, 192, 244, 0.08) !important;
+  outline: 1px solid rgba(102, 192, 244, 0.28);
+  outline-offset: -1px;
+}
+
+/* ─── Virtual scroll hint (CSS containment) ──────────────────────── */
+.achievement-list.table-mode .achievement-row {
+  content-visibility: auto;
+  contain-intrinsic-block-size: 44px;
 }
