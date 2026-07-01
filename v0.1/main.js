@@ -28,7 +28,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     title: 'Steam Achievement Manager',
-    icon: path.join(__dirname, 'assets', 'app-icon.ico'),
+    icon: path.join(__dirname, 'assets', 'app-icon-pullora.ico'),
     backgroundColor: '#101216',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -594,6 +594,9 @@ async function applyAchievementChangeGroupWithRetries(appId, changes) {
 function isSuspiciousGameName(name, appId = 0) {
   const value = String(name || '').trim();
   if (!value || value === `App ${Number(appId)}`) return true;
+  const platformParts = value.toLowerCase().split(/[\s,;/|+]+/u).filter(Boolean);
+  const platformWords = new Set(['windows', 'macos', 'mac', 'linux', 'steamdeck', 'win32', 'win64', 'macos64']);
+  if (platformParts.length && platformParts.every((part) => platformWords.has(part))) return true;
   if (value.length < 3) return true;
   if (!/[\p{L}\p{N}]/u.test(value)) return true;
   if ((value.match(/[\p{L}]/gu) || []).length < 2) return true;
@@ -1131,6 +1134,7 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
       displayName: meta.displayName || achievement.id,
       description: meta.description || '',
       hidden: Boolean(meta.hidden),
+      metadataIncomplete: Boolean(meta.metadataIncomplete),
       changeProtected: Boolean(meta.changeProtected),
       icon: meta.icon || '',
       iconGray: meta.iconGray || '',
@@ -1169,6 +1173,7 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
           displayName: meta.displayName || id,
           description: meta.description || '',
           hidden: Boolean(meta.hidden),
+          metadataIncomplete: Boolean(meta.metadataIncomplete),
           changeProtected: Boolean(meta.changeProtected),
           icon: meta.icon || '',
           iconGray: meta.iconGray || '',

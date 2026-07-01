@@ -119,6 +119,7 @@ function normalizeSchema(data) {
       changeProtected: Boolean(achievement.permission),
       icon: achievement.icon || '',
       iconGray: achievement.icongray || achievement.iconGray || '',
+      metadataIncomplete: false,
     })).filter((achievement) => achievement.name),
     stats: stats.map((stat) => ({
       name: stat.name || '',
@@ -191,7 +192,9 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
     const descIndex = block.indexOf('desc');
     const iconIndex = block.indexOf('icon');
     const iconGrayIndex = block.indexOf('icon_gray');
+    const hiddenIndex = block.indexOf('hidden');
     const changeProtected = block.includes('permission');
+    const hidden = hiddenIndex !== -1 && Number(block[hiddenIndex + 1] || 0) === 1;
 
     const displayName = readLocalized(block, displayIndex + 2, language) || apiName;
     const description = descIndex === -1 ? '' : readLocalized(block, descIndex + 1, language);
@@ -205,10 +208,11 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
         name: apiName,
         displayName,
         description,
-        hidden: false,
+        hidden,
         changeProtected,
         icon: iconFile ? base + iconFile : '',
         iconGray: iconGrayFile ? base + iconGrayFile : '',
+        metadataIncomplete: false,
       });
     } else {
       stats.push({
@@ -363,6 +367,7 @@ async function getGlobalAchievementSchema(appId) {
           hidden: false,
           icon: '',
           iconGray: '',
+          metadataIncomplete: true,
         }))
         .filter((achievement) => achievement.name),
       stats: [],
@@ -392,6 +397,10 @@ function mergeSchemas(primary, fallback) {
         changeProtected: Boolean(achievement.changeProtected || achievementsByName.get(name)?.changeProtected),
         icon: achievement.icon || achievementsByName.get(name)?.icon || '',
         iconGray: achievement.iconGray || achievementsByName.get(name)?.iconGray || '',
+        metadataIncomplete: Boolean(
+          achievement.metadataIncomplete &&
+          achievementsByName.get(name)?.metadataIncomplete !== false
+        ),
       });
     }
 

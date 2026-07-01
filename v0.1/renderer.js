@@ -179,6 +179,10 @@ const UI_TRANSLATIONS = {
     unlockedFirst: 'Розблоковані спочатку',
     changedFirst: 'Змінені спочатку',
     hiddenFirst: 'Приховані спочатку',
+    hidden: 'Приховане',
+    hiddenAchievement: 'Приховане досягнення',
+    hiddenAchievementDescription: 'Steam не повернув відкриту назву або опис для цього досягнення.',
+    metadataUnavailable: 'Метадані досягнення недоступні',
     dlcFirst: 'DLC спочатку',
     newestUnlocks: 'Новіші розблокування',
     oldestUnlocks: 'Старіші розблокування',
@@ -255,6 +259,10 @@ const UI_TRANSLATIONS = {
     unlockedFirst: 'Unlocked first',
     changedFirst: 'Changed first',
     hiddenFirst: 'Hidden first',
+    hidden: 'Hidden',
+    hiddenAchievement: 'Hidden achievement',
+    hiddenAchievementDescription: 'Steam did not return a public name or description for this achievement.',
+    metadataUnavailable: 'Achievement metadata unavailable',
     dlcFirst: 'DLC first',
     newestUnlocks: 'Newest unlocks',
     oldestUnlocks: 'Oldest unlocks',
@@ -493,6 +501,9 @@ function isRiskyGame(game) {
 function isSuspiciousGameName(name, appId = 0) {
   const value = String(name || '').trim();
   if (!value || value === `App ${Number(appId)}`) return true;
+  const platformParts = value.toLowerCase().split(/[\s,;/|+]+/u).filter(Boolean);
+  const platformWords = new Set(['windows', 'macos', 'mac', 'linux', 'steamdeck', 'win32', 'win64', 'macos64']);
+  if (platformParts.length && platformParts.every((part) => platformWords.has(part))) return true;
   if (value.length < 3) return true;
   if (!/[\p{L}\p{N}]/u.test(value)) return true;
   if ((value.match(/[\p{L}]/gu) || []).length < 2) return true;
@@ -565,6 +576,43 @@ function formatUnlockTime(achievement) {
   } catch {
     return new Date(timestamp * 1000).toLocaleString();
   }
+}
+
+function looksLikePlaceholderAchievementId(value) {
+  const id = String(value || '').trim();
+  return /^\d+$/.test(id) || /^achievement[_:.-]?\d+$/i.test(id);
+}
+
+function isAchievementMetadataPlaceholder(achievement) {
+  const id = String(achievement?.id || '').trim();
+  const displayName = String(achievement?.displayName || '').trim();
+  const description = String(achievement?.description || '').trim();
+  const hasIcon = Boolean(achievement?.icon || achievement?.iconGray);
+  const sameTitle = !displayName || displayName === id;
+  const sameDescription = !description || description === id;
+  return Boolean(achievement?.metadataIncomplete) ||
+    (!hasIcon && sameTitle && sameDescription && looksLikePlaceholderAchievementId(id));
+}
+
+function isAchievementHiddenLike(achievement) {
+  return Boolean(achievement?.hidden) || isAchievementMetadataPlaceholder(achievement);
+}
+
+function getAchievementPresentation(achievement) {
+  const id = String(achievement?.id || '').trim();
+  const displayName = String(achievement?.displayName || '').trim();
+  const description = String(achievement?.description || '').trim();
+  const missingMetadata = isAchievementMetadataPlaceholder(achievement);
+  const hiddenLike = isAchievementHiddenLike(achievement);
+  const titleLooksInternal = !displayName || displayName === id || looksLikePlaceholderAchievementId(displayName);
+  const descriptionLooksInternal = !description || description === id;
+
+  return {
+    title: hiddenLike && titleLooksInternal ? t('hiddenAchievement') : (displayName || id),
+    description: hiddenLike && descriptionLooksInternal ? t('hiddenAchievementDescription') : (description || id),
+    hiddenLike,
+    missingMetadata,
+  };
 }
 
 function bindRetryingImage(image, urls, blankClass) {
@@ -728,7 +776,7 @@ function updateAchievementFilterLabels() {
 function sortAchievements(achievements) {
   const sorted = [...achievements];
   const byOriginalOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
-  const byName = (a, b) => String(a.displayName || a.id).localeCompare(String(b.displayName || b.id));
+  const byName = (a, b) => getAchievementPresentation(a).title.localeCompare(getAchievementPresentation(b).title);
   const byDlc = (a, b) => {
     const left = isDlcAchievement(a) ? 0 : 1;
     const right = isDlcAchievement(b) ? 0 : 1;
@@ -780,8 +828,8 @@ function sortAchievements(achievements) {
   }
   if (state.achievementSort === 'hidden-first') {
     sorted.sort((a, b) => {
-      const left = a.hidden ? 0 : 1;
-      const right = b.hidden ? 0 : 1;
+      const left = isAchievementHiddenLike(a) ? 0 : 1;
+      const right = isAchievementHiddenLike(b) ? 0 : 1;
       return left - right || byOriginalOrder(a, b);
     });
   }
@@ -793,10 +841,11 @@ function getFilteredAchievements() {
   const query = elements.achievementSearch.value.trim().toLowerCase();
   const filtered = state.achievements.filter((achievement) => {
     const draftAchieved = getAchievementDraftState(achievement);
+    const presentation = getAchievementPresentation(achievement);
     const matchesQuery = !query ||
-      achievement.id.toLowerCase().includes(query) ||
-      achievement.displayName.toLowerCase().includes(query) ||
-      achievement.description.toLowerCase().includes(query);
+      String(achievement.id || '').toLowerCase().includes(query) ||
+      presentation.title.toLowerCase().includes(query) ||
+      presentation.description.toLowerCase().includes(query);
 
     if (!matchesQuery) return false;
     if (state.achievementFilter === 'unlocked') return draftAchieved;
@@ -1042,11 +1091,13 @@ function renderAchievements() {
 
     const copy = document.createElement('div');
     copy.className = 'achievement-copy';
+    const presentation = getAchievementPresentation(achievement);
     copy.innerHTML = `
-      <strong>${escapeHtml(achievement.displayName || achievement.id)}</strong>
-      <span>${escapeHtml(achievement.description || achievement.id)}</span>
+      <strong>${escapeHtml(presentation.title)}</strong>
+      <span>${escapeHtml(presentation.description)}</span>
       ${dlcLabel ? `<em>${escapeHtml(dlcLabel)}</em>` : ''}
-      ${achievement.hidden ? '<em>Hidden</em>' : ''}
+      ${presentation.hiddenLike ? `<em>${escapeHtml(t('hidden'))}</em>` : ''}
+      ${presentation.missingMetadata ? `<em>${escapeHtml(t('metadataUnavailable'))}: ${escapeHtml(achievement.id)}</em>` : ''}
       ${isProtected ? `<em>${escapeHtml(getUiLanguage() === 'english' ? 'Blocked from Steam changes' : 'Заблоковано для зміни Steam')}</em>` : ''}
     `;
     const status = document.createElement('span');
@@ -1565,7 +1616,7 @@ function getAchievementByKey(key) {
 
 function getAchievementNameByKey(key) {
   const achievement = getAchievementByKey(key);
-  return achievement?.displayName || achievement?.id || key;
+  return achievement ? getAchievementPresentation(achievement).title : key;
 }
 
 function getBackupAchievementKey(achievement, backup) {
@@ -1588,6 +1639,7 @@ function getAchievementSnapshot() {
     displayName: achievement.displayName || achievement.id,
     description: achievement.description || '',
     hidden: Boolean(achievement.hidden),
+    metadataIncomplete: Boolean(achievement.metadataIncomplete),
     changeProtected: Boolean(achievement.changeProtected),
     achieved: Boolean(achievement.achieved),
     unlockTime: Number(achievement.unlockTime || 0),

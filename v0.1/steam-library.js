@@ -128,6 +128,16 @@ function extractPrintableStrings(buffer) {
     .filter(Boolean);
 }
 
+function isPlatformOnlyValue(value) {
+  const parts = String(value || '')
+    .toLowerCase()
+    .split(/[\s,;/|+]+/u)
+    .filter(Boolean);
+  if (!parts.length) return false;
+  const platformWords = new Set(['windows', 'macos', 'mac', 'linux', 'steamdeck', 'win32', 'win64', 'macos64']);
+  return parts.every((part) => platformWords.has(part));
+}
+
 function isPlausibleAppName(value) {
   if (!value || value.length < 2 || value.length > 120) return false;
   if (value.includes('\uFFFD')) return false;
@@ -141,6 +151,7 @@ function isPlausibleAppName(value) {
   if (/^\d+$/.test(value)) return false;
   if (/eula/i.test(value)) return false;
   if (value.startsWith('#')) return false;
+  if (isPlatformOnlyValue(value)) return false;
   if (/^(game|demo|dlc|tool|music|video|released|windows|macos|linux|win32|win64|macos64)$/i.test(value)) return false;
   return true;
 }
