@@ -104,6 +104,14 @@ function inferStatType(stat) {
   return Number.isInteger(defaultValue) ? 'int' : 'float';
 }
 
+function isProtectedPermission(value) {
+  if (value === undefined || value === null || value === false) return false;
+  if (typeof value === 'number') return value !== 0;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized || normalized === '0' || normalized === 'false' || normalized === 'none') return false;
+  return true;
+}
+
 function normalizeSchema(data) {
   const game = data?.game || {};
   const available = game.availableGameStats || {};
@@ -116,7 +124,7 @@ function normalizeSchema(data) {
       displayName: achievement.displayName || achievement.name || achievement.apiname || '',
       description: achievement.description || '',
       hidden: Number(achievement.hidden || 0) === 1,
-      changeProtected: Boolean(achievement.permission),
+      changeProtected: isProtectedPermission(achievement.permission),
       icon: achievement.icon || '',
       iconGray: achievement.icongray || achievement.iconGray || '',
       metadataIncomplete: false,
@@ -193,7 +201,8 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
     const iconIndex = block.indexOf('icon');
     const iconGrayIndex = block.indexOf('icon_gray');
     const hiddenIndex = block.indexOf('hidden');
-    const changeProtected = block.includes('permission');
+    const permissionIndex = block.indexOf('permission');
+    const changeProtected = permissionIndex !== -1 && isProtectedPermission(block[permissionIndex + 1]);
     const hidden = hiddenIndex !== -1 && Number(block[hiddenIndex + 1] || 0) === 1;
 
     const displayName = readLocalized(block, displayIndex + 2, language) || apiName;

@@ -1,5 +1,9 @@
 # MY SAM
 
+<p align="center">
+  <img src="v0.1/assets/app-icon-pullora.png" alt="MY SAM logo" width="128" height="128">
+</p>
+
 Компактний десктоп-менеджер досягнень та ігрової статистики Steam для Windows.
 
 ## Що вміє
