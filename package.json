@@ -1,6 +1,6 @@
 {
   "name": "my-sam",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Compact Windows desktop Steam achievement and stats manager.",
   "main": "v0.1/main.js",
   "private": true,
@@ -29,6 +29,7 @@
     ],
     "asarUnpack": [
       "node_modules/steamworks.js/**/*",
+      "v0.1/steam-worker.js",
       "v0.1/helpers/**/*"
     ],
     "win": {

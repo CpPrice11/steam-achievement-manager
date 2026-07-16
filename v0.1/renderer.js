@@ -182,6 +182,8 @@ const UI_TRANSLATIONS = {
     hidden: 'Приховане',
     hiddenAchievement: 'Приховане досягнення',
     hiddenAchievementDescription: 'Steam не повернув відкриту назву або опис для цього досягнення.',
+    metadataAchievement: 'Досягнення без метаданих',
+    metadataAchievementDescription: 'Steam повернув API-назву, але не повернув відкриту назву або опис.',
     metadataUnavailable: 'Метадані досягнення недоступні',
     dlcFirst: 'DLC спочатку',
     newestUnlocks: 'Новіші розблокування',
@@ -262,6 +264,8 @@ const UI_TRANSLATIONS = {
     hidden: 'Hidden',
     hiddenAchievement: 'Hidden achievement',
     hiddenAchievementDescription: 'Steam did not return a public name or description for this achievement.',
+    metadataAchievement: 'Achievement without metadata',
+    metadataAchievementDescription: 'Steam returned the API name, but did not return a public title or description.',
     metadataUnavailable: 'Achievement metadata unavailable',
     dlcFirst: 'DLC first',
     newestUnlocks: 'Newest unlocks',
@@ -595,7 +599,7 @@ function isAchievementMetadataPlaceholder(achievement) {
 }
 
 function isAchievementHiddenLike(achievement) {
-  return Boolean(achievement?.hidden) || isAchievementMetadataPlaceholder(achievement);
+  return Boolean(achievement?.hidden);
 }
 
 function getAchievementPresentation(achievement) {
@@ -606,10 +610,12 @@ function getAchievementPresentation(achievement) {
   const hiddenLike = isAchievementHiddenLike(achievement);
   const titleLooksInternal = !displayName || displayName === id || looksLikePlaceholderAchievementId(displayName);
   const descriptionLooksInternal = !description || description === id;
+  const fallbackTitle = missingMetadata && titleLooksInternal ? t('metadataAchievement') : (displayName || id);
+  const fallbackDescription = missingMetadata && descriptionLooksInternal ? t('metadataAchievementDescription') : (description || id);
 
   return {
-    title: hiddenLike && titleLooksInternal ? t('hiddenAchievement') : (displayName || id),
-    description: hiddenLike && descriptionLooksInternal ? t('hiddenAchievementDescription') : (description || id),
+    title: hiddenLike && titleLooksInternal ? t('hiddenAchievement') : fallbackTitle,
+    description: hiddenLike && descriptionLooksInternal ? t('hiddenAchievementDescription') : fallbackDescription,
     hiddenLike,
     missingMetadata,
   };

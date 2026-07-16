@@ -15,6 +15,8 @@ const ALLOWED_UI_SCALES = ['compact', 'normal', 'large'];
 const ALLOWED_GAME_SORTS = ['name', 'appid', 'achievements-first', 'risk-first', 'issues-first'];
 const NON_GAME_STORE_TYPES = new Set(['dlc', 'music', 'video', 'episode', 'series', 'advertising', 'config']);
 
+app.disableHardwareAcceleration();
+
 function pickAllowed(value, allowed, fallback) {
   return allowed.includes(value) ? value : fallback;
 }
@@ -76,7 +78,7 @@ function isSteamRunning() {
 
 function runSteamWorker(payload) {
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, 'steam-worker.js');
+    const workerPath = getUnpackedPath('v0.1', 'steam-worker.js');
     const child = fork(workerPath, [], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       execPath: process.execPath,
@@ -456,6 +458,7 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
   const ids = Array.isArray(achievementIds)
     ? achievementIds.map((id) => String(id)).filter(Boolean)
     : [];
+  const wanted = new Set(ids);
   const fallback = makeAchievementStateFallback(ids);
   const profileId = String(steamId64 || '').trim();
   if (!ids.length) return { status: 'empty', states: fallback };
@@ -480,9 +483,11 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
       if (!achievements.length) continue;
 
       const states = new Map(fallback);
+      let matched = 0;
       for (const achievement of achievements) {
         const id = String(achievement.apiname || achievement.name || '').trim();
         if (!id) continue;
+        if (wanted.has(id)) matched += 1;
         states.set(id, {
           achieved: achievement.achieved === true || Number(achievement.achieved || 0) === 1,
           unlockTime: Number(achievement.unlocktime || achievement.unlockTime || 0) || 0,
@@ -492,13 +497,15 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
       return {
         status: attemptKey ? 'loaded-web-api' : 'loaded-public',
         states,
+        matchedCount: matched,
+        returnedCount: achievements.length,
       };
     } catch {
       // Private profiles and some games reject this endpoint; keep the app read-only instead of starting the game app through Steamworks.
     }
   }
 
-  return { status: 'unavailable', states: fallback };
+  return { status: 'unavailable', states: fallback, matchedCount: 0, returnedCount: 0 };
 }
 
 async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamId64, options = {}) {
@@ -511,7 +518,9 @@ async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamI
     ? await readPlayerAchievementStatesFromWebApi(appId, ids, apiKey, steamId64)
     : { status: ids.length ? 'skipped-web-api' : 'empty', states: makeAchievementStateFallback(ids) };
 
-  if (!ids.length || webResult.status === 'loaded-web-api' || webResult.status === 'loaded-public') {
+  const webLoaded = webResult.status === 'loaded-web-api' || webResult.status === 'loaded-public';
+  const webMatchesSchema = Number(webResult.matchedCount || 0) > 0 || ids.length === 0;
+  if (!ids.length || (webLoaded && webMatchesSchema)) {
     return webResult;
   }
   if (!allowSteamworksFallback) return webResult;
@@ -536,6 +545,9 @@ async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamI
     return {
       status: 'loaded-steamworks-fallback',
       states,
+      webStatus: webResult.status,
+      webMatchedCount: Number(webResult.matchedCount || 0),
+      webReturnedCount: Number(webResult.returnedCount || 0),
     };
   } catch {
     return webResult;
@@ -635,7 +647,7 @@ async function enrichGameListWithStoreDetails(games) {
       appId,
       name: storeName && (isSuspiciousGameName(game.name, appId) || game.source === 'localconfig')
         ? storeName
-        : (game.name || storeName || `App ${appId}`),
+        : (isSuspiciousGameName(game.name, appId) ? (storeName || `App ${appId}`) : (game.name || storeName || `App ${appId}`)),
       icon: game.icon || storeIcon || '',
       storeType: type || game.storeType || '',
     });
