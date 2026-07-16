@@ -1,6 +1,6 @@
 {
   "name": "my-sam",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Compact Windows desktop Steam achievement and stats manager.",
   "main": "v0.1/main.js",
   "private": true,

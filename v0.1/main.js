@@ -606,6 +606,7 @@ async function applyAchievementChangeGroupWithRetries(appId, changes) {
 function isSuspiciousGameName(name, appId = 0) {
   const value = String(name || '').trim();
   if (!value || value === `App ${Number(appId)}`) return true;
+  if (/^\d+=Rj$/i.test(value)) return true;
   const platformParts = value.toLowerCase().split(/[\s,;/|+]+/u).filter(Boolean);
   const platformWords = new Set(['windows', 'macos', 'mac', 'linux', 'steamdeck', 'win32', 'win64', 'macos64']);
   if (platformParts.length && platformParts.every((part) => platformWords.has(part))) return true;
@@ -642,12 +643,15 @@ async function enrichGameListWithStoreDetails(games) {
 
     const storeName = String(detail?.name || '').trim();
     const storeIcon = getStoreIconFromDetails(appId, detail);
+    const suspiciousLocalName = isSuspiciousGameName(game.name, appId);
+    const displayName = storeName && (suspiciousLocalName || game.source === 'localconfig')
+      ? storeName
+      : (suspiciousLocalName ? '' : String(game.name || '').trim());
+    if (!displayName && game.source === 'localconfig' && !game.hasAchievements) continue;
     enriched.push({
       ...game,
       appId,
-      name: storeName && (isSuspiciousGameName(game.name, appId) || game.source === 'localconfig')
-        ? storeName
-        : (isSuspiciousGameName(game.name, appId) ? (storeName || `App ${appId}`) : (game.name || storeName || `App ${appId}`)),
+      name: displayName || storeName || `App ${appId}`,
       icon: game.icon || storeIcon || '',
       storeType: type || game.storeType || '',
     });

@@ -141,6 +141,7 @@ function isPlatformOnlyValue(value) {
 function isPlausibleAppName(value) {
   if (!value || value.length < 2 || value.length > 120) return false;
   if (value.includes('\uFFFD')) return false;
+  if (/^\d+=Rj$/i.test(value)) return false;
   if (!/[\p{L}\p{N}]/u.test(value)) return false;
   if (!/^[\p{L}\p{N}]/u.test(value)) return false;
   if (value.length < 4) return false;

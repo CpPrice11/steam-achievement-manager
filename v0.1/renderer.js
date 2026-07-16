@@ -505,6 +505,7 @@ function isRiskyGame(game) {
 function isSuspiciousGameName(name, appId = 0) {
   const value = String(name || '').trim();
   if (!value || value === `App ${Number(appId)}`) return true;
+  if (/^\d+=Rj$/i.test(value)) return true;
   const platformParts = value.toLowerCase().split(/[\s,;/|+]+/u).filter(Boolean);
   const platformWords = new Set(['windows', 'macos', 'mac', 'linux', 'steamdeck', 'win32', 'win64', 'macos64']);
   if (platformParts.length && platformParts.every((part) => platformWords.has(part))) return true;
