@@ -1,7 +1,7 @@
 # Roadmap — Steam Achievement Manager
 
 > Версія документа: 2026-05  
-> Поточна версія програми: **v0.2**
+> Поточна версія програми: **v0.2.5**
 
 ---
 
@@ -40,6 +40,7 @@
 | **Bulk selection** — Ctrl+click вибирає/знімає вибір кількох досягнень; окрема панель Розблокувати/Заблокувати |
 | **Keyboard shortcuts** — `Ctrl+Z` скасувати зміни, `Ctrl+Enter` підтвердити, `Ctrl+F` фокус на пошук, `Escape` скасувати вибір |
 | **Resize sidebar** — drag-handle між sidebar і контентом, ширина зберігається в localStorage |
+| **v0.2.5 installer fix** — NSIS повернуто до one-click per-user setup, щоб обійти crash `System.dll` у assisted installer на Windows 10/11 |
 
 ---
 
@@ -97,4 +98,4 @@ v2.0 ── dashboard · card view · planner · import/export
 
 ---
 
-*Останнє оновлення: 2026-05*
+*Останнє оновлення: 2026-09-13*

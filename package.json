@@ -1,6 +1,6 @@
 {
   "name": "my-sam",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Compact Windows desktop Steam achievement and stats manager.",
   "main": "v0.1/main.js",
   "private": true,
@@ -36,8 +36,7 @@
       "icon": "v0.1/assets/app-icon-pullora.ico"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
       "perMachine": false
     }
   }
