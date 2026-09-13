@@ -1,6 +1,9 @@
 param(
   [Parameter(Mandatory = $true)]
-  [int]$AppId
+  [int]$AppId,
+
+  [ValidateSet('apply', 'states', 'diagnose')]
+  [string]$Action = 'apply'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,21 +12,24 @@ function Write-Result($result) {
   $result | ConvertTo-Json -Compress -Depth 6 | Write-Output
 }
 
-$changesJson = [Console]::In.ReadToEnd()
-$changes = @()
-if (-not [string]::IsNullOrWhiteSpace($changesJson)) {
-  $parsed = $changesJson | ConvertFrom-Json
+$inputJson = [Console]::In.ReadToEnd()
+$inputData = @()
+if (-not [string]::IsNullOrWhiteSpace($inputJson)) {
+  $parsed = $inputJson | ConvertFrom-Json
   if ($parsed -is [array]) {
-    $changes = @($parsed)
+    $inputData = @($parsed)
   } elseif ($null -ne $parsed) {
-    $changes = @($parsed)
+    $inputData = $parsed
   }
 }
 
 $result = [ordered]@{
+  action = $Action
   changed = @()
   failed = @()
+  achievements = @()
   stored = $false
+  helper = "steam-flat-helper"
   error = $null
 }
 
@@ -63,12 +69,30 @@ public static class SteamFlatApi
     public static extern IntPtr SteamAPI_SteamUserStats_v012();
 
     [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr SteamAPI_SteamApps_v008();
+
+    [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool SteamAPI_ISteamApps_BIsSubscribedApp(IntPtr self, uint appId);
+
+    [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool SteamAPI_ISteamApps_BIsAppInstalled(IntPtr self, uint appId);
+
+    [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr SteamAPI_ISteamApps_GetCurrentGameLanguage(IntPtr self);
+
+    [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool SteamAPI_ISteamUserStats_RequestCurrentStats(IntPtr self);
 
     [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool SteamAPI_ISteamUserStats_GetAchievement(IntPtr self, string achievement, [MarshalAs(UnmanagedType.I1)] out bool achieved);
+
+    [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    [return: MarshalAs(UnmanagedType.I1)]
+    public static extern bool SteamAPI_ISteamUserStats_GetAchievementAndUnlockTime(IntPtr self, string achievement, [MarshalAs(UnmanagedType.I1)] out bool achieved, out uint unlockTime);
 
     [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.I1)]
@@ -81,6 +105,11 @@ public static class SteamFlatApi
     [DllImport("steam_api64", CallingConvention = CallingConvention.Cdecl)]
     [return: MarshalAs(UnmanagedType.I1)]
     public static extern bool SteamAPI_ISteamUserStats_StoreStats(IntPtr self);
+
+    public static string PtrToString(IntPtr value)
+    {
+        return value == IntPtr.Zero ? "" : Marshal.PtrToStringAnsi(value);
+    }
 }
 '@
 
@@ -92,20 +121,54 @@ public static class SteamFlatApi
   if ($stats -eq [IntPtr]::Zero) {
     throw "Steam did not return the user stats interface for this app."
   }
+  $apps = [SteamFlatApi]::SteamAPI_SteamApps_v008()
 
   [SteamFlatApi]::SteamAPI_ISteamUserStats_RequestCurrentStats($stats) | Out-Null
-  $first = @($changes | Where-Object { $_.id } | Select-Object -First 1)[0]
+  $first = $null
+  if ($Action -eq 'apply' -or $Action -eq 'states') {
+    $first = @($inputData | Where-Object { $_.id -or $_ } | Select-Object -First 1)[0]
+  }
   for ($i = 0; $i -lt 80; $i++) {
     [SteamFlatApi]::SteamAPI_RunCallbacks()
     if ($null -eq $first) { break }
     $isAchieved = $false
-    if ([SteamFlatApi]::SteamAPI_ISteamUserStats_GetAchievement($stats, [string]$first.id, [ref]$isAchieved)) {
+    $firstId = if ($first.id) { [string]$first.id } else { [string]$first }
+    if ([SteamFlatApi]::SteamAPI_ISteamUserStats_GetAchievement($stats, $firstId, [ref]$isAchieved)) {
       break
     }
     Start-Sleep -Milliseconds 100
   }
 
-  foreach ($change in $changes) {
+  if ($Action -eq 'diagnose') {
+    $result.requestedAppId = $AppId
+    $result.installed = $false
+    $result.subscribed = $false
+    $result.currentLanguage = ""
+    if ($apps -ne [IntPtr]::Zero) {
+      $result.installed = [SteamFlatApi]::SteamAPI_ISteamApps_BIsAppInstalled($apps, [uint32]$AppId)
+      $result.subscribed = [SteamFlatApi]::SteamAPI_ISteamApps_BIsSubscribedApp($apps, [uint32]$AppId)
+      $result.currentLanguage = [SteamFlatApi]::PtrToString([SteamFlatApi]::SteamAPI_ISteamApps_GetCurrentGameLanguage($apps))
+    }
+  } elseif ($Action -eq 'states') {
+    foreach ($item in @($inputData)) {
+      $id = if ($item.id) { [string]$item.id } else { [string]$item }
+      if ([string]::IsNullOrWhiteSpace($id)) { continue }
+
+      $isAchieved = $false
+      $unlockTime = [uint32]0
+      $ok = [SteamFlatApi]::SteamAPI_ISteamUserStats_GetAchievementAndUnlockTime($stats, $id, [ref]$isAchieved, [ref]$unlockTime)
+      if (-not $ok) {
+        $ok = [SteamFlatApi]::SteamAPI_ISteamUserStats_GetAchievement($stats, $id, [ref]$isAchieved)
+      }
+
+      if ($ok) {
+        $result.achievements += [ordered]@{ id = $id; achieved = $isAchieved; unlockTime = [uint32]$unlockTime }
+      } else {
+        $result.achievements += [ordered]@{ id = $id; achieved = $false; unlockTime = 0; error = "Steam does not see this achievement API name in the current session." }
+      }
+    }
+  } else {
+  foreach ($change in @($inputData)) {
     $id = [string]$change.id
     if ([string]::IsNullOrWhiteSpace($id)) { continue }
     $achieved = [bool]$change.achieved
@@ -132,6 +195,7 @@ public static class SteamFlatApi
   if ($result.changed.Count -gt 0) {
     $result.stored = [SteamFlatApi]::SteamAPI_ISteamUserStats_StoreStats($stats)
   }
+  }
 
   for ($i = 0; $i -lt 30; $i++) {
     [SteamFlatApi]::SteamAPI_RunCallbacks()
@@ -139,7 +203,7 @@ public static class SteamFlatApi
   }
 } catch {
   $result.error = $_.Exception.Message
-  foreach ($change in $changes) {
+  foreach ($change in @($inputData)) {
     $id = [string]$change.id
     if ([string]::IsNullOrWhiteSpace($id)) { continue }
     $alreadyChanged = @($result.changed | Where-Object { $_.id -eq $id }).Count -gt 0

@@ -149,7 +149,7 @@ function getSteamApiDllPath() {
   return getUnpackedPath('node_modules', 'steamworks.js', 'dist', 'win64', 'steam_api64.dll');
 }
 
-function runSteamFlatHelper(appId, changes) {
+function runSteamFlatHelper(appId, input = [], action = 'apply', options = {}) {
   return new Promise((resolve, reject) => {
     const helperPath = getSteamFlatHelperPath();
     const steamApiDll = getSteamApiDllPath();
@@ -161,6 +161,8 @@ function runSteamFlatHelper(appId, changes) {
       helperPath,
       '-AppId',
       String(Number(appId)),
+      '-Action',
+      action,
     ], {
       env: {
         ...process.env,
@@ -178,7 +180,7 @@ function runSteamFlatHelper(appId, changes) {
       settled = true;
       child.kill();
       reject(new Error('Steam flat helper timed out.'));
-    }, 45000);
+    }, Number(options.timeoutMs || 45000));
 
     child.stdout.on('data', (chunk) => {
       stdout += chunk.toString();
@@ -202,13 +204,17 @@ function runSteamFlatHelper(appId, changes) {
           .map((line) => line.trim())
           .find((line) => line.startsWith('{') && line.endsWith('}'));
         const result = JSON.parse(jsonLine || '{}');
+        if (result.error) {
+          reject(new Error(result.error));
+          return;
+        }
         resolve(result);
       } catch {
         reject(new Error(stderr.trim() || stdout.trim() || 'Steam flat helper failed.'));
       }
     });
 
-    child.stdin.end(JSON.stringify(changes));
+    child.stdin.end(JSON.stringify(input));
   });
 }
 
@@ -508,50 +514,100 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
   return { status: 'unavailable', states: fallback, matchedCount: 0, returnedCount: 0 };
 }
 
+async function readPlayerAchievementStatesFromNative(appId, achievementIds, options = {}) {
+  const ids = Array.isArray(achievementIds)
+    ? achievementIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  const states = makeAchievementStateFallback(ids);
+  if (!ids.length) return { status: 'empty', states };
+
+  const result = await runSteamFlatHelper(appId, ids, 'states', {
+    timeoutMs: Number(options.timeoutMs || 30000),
+  });
+  let readable = 0;
+  for (const achievement of result.achievements || []) {
+    const id = String(achievement?.id || '').trim();
+    if (!id) continue;
+    if (!achievement.error) readable += 1;
+    states.set(id, {
+      achieved: Boolean(achievement.achieved),
+      unlockTime: Number(achievement.unlockTime || 0) || 0,
+    });
+  }
+
+  if (!readable) {
+    throw new Error('Steam did not return achievement states for this app.');
+  }
+
+  return {
+    status: 'loaded-native',
+    states,
+    nativeReadCount: readable,
+    nativeReturnedCount: (result.achievements || []).length,
+  };
+}
+
+async function readPlayerAchievementStatesFromSteamworks(appId, achievementIds, options = {}) {
+  const ids = Array.isArray(achievementIds)
+    ? achievementIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  const steamworksStates = await runSteamWorker({
+    action: 'achievements',
+    appId: Number(appId),
+    achievementIds: ids,
+    timeoutMs: Number(options.timeoutMs || 7000),
+  });
+  const states = makeAchievementStateFallback(ids);
+  for (const achievement of steamworksStates || []) {
+    const id = String(achievement?.id || '').trim();
+    if (id) {
+      states.set(id, {
+        achieved: Boolean(achievement.achieved),
+        unlockTime: Number(achievement.unlockTime || 0) || 0,
+      });
+    }
+  }
+  return {
+    status: 'loaded-steamworks-fallback',
+    states,
+  };
+}
+
 async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamId64, options = {}) {
   const ids = Array.isArray(achievementIds)
     ? achievementIds.map((id) => String(id)).filter(Boolean)
     : [];
+  if (!ids.length) return { status: 'empty', states: makeAchievementStateFallback(ids) };
+
+  const preferNative = options.preferNative !== false;
   const allowSteamworksFallback = options.allowSteamworksFallback !== false;
+  const errors = [];
+
+  if (preferNative) {
+    try {
+      return await readPlayerAchievementStatesFromNative(appId, ids, options);
+    } catch (error) {
+      errors.push(`native: ${error.message}`);
+    }
+  }
+
+  if (allowSteamworksFallback) {
+    try {
+      return await readPlayerAchievementStatesFromSteamworks(appId, ids, options);
+    } catch (error) {
+      errors.push(`steamworks: ${error.message}`);
+    }
+  }
+
   const canUseWebApi = /^\d{16,20}$/.test(String(steamId64 || '').trim());
   const webResult = canUseWebApi
     ? await readPlayerAchievementStatesFromWebApi(appId, ids, apiKey, steamId64)
     : { status: ids.length ? 'skipped-web-api' : 'empty', states: makeAchievementStateFallback(ids) };
 
-  const webLoaded = webResult.status === 'loaded-web-api' || webResult.status === 'loaded-public';
-  const webMatchesSchema = Number(webResult.matchedCount || 0) > 0 || ids.length === 0;
-  if (!ids.length || (webLoaded && webMatchesSchema)) {
-    return webResult;
-  }
-  if (!allowSteamworksFallback) return webResult;
-
-  try {
-    const steamworksStates = await runSteamWorker({
-      action: 'achievements',
-      appId: Number(appId),
-      achievementIds: ids,
-      timeoutMs: Number(options.timeoutMs || 7000),
-    });
-    const states = makeAchievementStateFallback(ids);
-    for (const achievement of steamworksStates || []) {
-      const id = String(achievement?.id || '').trim();
-      if (id) {
-        states.set(id, {
-          achieved: Boolean(achievement.achieved),
-          unlockTime: Number(achievement.unlockTime || 0) || 0,
-        });
-      }
-    }
-    return {
-      status: 'loaded-steamworks-fallback',
-      states,
-      webStatus: webResult.status,
-      webMatchedCount: Number(webResult.matchedCount || 0),
-      webReturnedCount: Number(webResult.returnedCount || 0),
-    };
-  } catch {
-    return webResult;
-  }
+  return {
+    ...webResult,
+    errors,
+  };
 }
 
 async function applyAchievementChangeGroup(appId, changes, options = {}) {
@@ -1307,9 +1363,20 @@ ipcMain.handle('stats:reset', async (_event, { appId }) => {
 });
 
 ipcMain.handle('steamworks:diagnose', async (_event, { appId }) => {
-  return runSteamWorker({
-    action: 'diagnose',
-    appId: Number(appId),
-    timeoutMs: 7000,
-  });
+  const numericAppId = Number(appId);
+  const [steamworks, native] = await Promise.allSettled([
+    runSteamWorker({
+      action: 'diagnose',
+      appId: numericAppId,
+      timeoutMs: 7000,
+    }),
+    runSteamFlatHelper(numericAppId, [], 'diagnose', { timeoutMs: 10000 }),
+  ]);
+
+  return {
+    ...(steamworks.status === 'fulfilled' ? steamworks.value : { error: steamworks.reason?.message || String(steamworks.reason) }),
+    nativeHelper: native.status === 'fulfilled'
+      ? native.value
+      : { error: native.reason?.message || String(native.reason) },
+  };
 });

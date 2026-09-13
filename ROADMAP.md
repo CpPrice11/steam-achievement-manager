@@ -1,7 +1,7 @@
 # Roadmap — Steam Achievement Manager
 
 > Версія документа: 2026-05  
-> Поточна версія програми: **v0.2.5**
+> Поточна версія програми: **v0.3.0**
 
 ---
 
@@ -41,6 +41,26 @@
 | **Keyboard shortcuts** — `Ctrl+Z` скасувати зміни, `Ctrl+Enter` підтвердити, `Ctrl+F` фокус на пошук, `Escape` скасувати вибір |
 | **Resize sidebar** — drag-handle між sidebar і контентом, ширина зберігається в localStorage |
 | **v0.2.5 installer fix** — NSIS повернуто до one-click per-user setup, щоб обійти crash `System.dll` у assisted installer на Windows 10/11 |
+
+---
+
+## ✅ v0.3 — Engine Stability
+
+*Мета: прибрати крихке визначення стану досягнень і підготувати основу для SAM parity без повного rewrite.*
+
+| Що зроблено / робиться |
+|---|
+| **Native achievement states** — `steam-flat-helper.ps1` читає `GetAchievementAndUnlockTime`, щоб бачити реально відкриті досягнення без залежності від public Web API |
+| **Fallback order** — стан досягнень читається в порядку `native helper → steamworks.js → Web API` |
+| **Hidden false positives** — UI не показує досягнення як приховане, якщо Steam/schema вже дали нормальну назву й опис |
+| **Native diagnostics** — діагностика показує стан `steamworks.js` і native helper окремо |
+| **Regression test** — додано тест для local schema metadata/hidden |
+
+| Що залишилось після v0.3 |
+|---|
+| Перевірити на реальному Steam профілі Skyrim/інших проблемних іграх, що `stateStatus` показує `loaded-native` |
+| Винести весь UI-текст у локалізацію EN/UK у v0.4 |
+| Додати stats parity для float/average-rate stats у v0.6 |
 
 ---
 
@@ -89,9 +109,13 @@
 ```
 v0.1 ── базовий функціонал
          │
-v0.2 ──────────── ЗАРАЗ  (virtual scroll · toasts · bulk select · shortcuts · resize)
+v0.2 ── virtual scroll · toasts · bulk select · shortcuts · resize
          │
-v1.0 ── timestamp editor · backup diff · dry-run · multi-profile
+v0.3 ── native achievement state · hidden false positives · diagnostics
+         │
+v0.4 ──────────── ДАЛІ  (i18n cleanup · custom dialogs · better diagnostics)
+         │
+v1.0 ── backup diff · dry-run · per-game undo · multi-profile
          │
 v2.0 ── dashboard · card view · planner · import/export
 ```

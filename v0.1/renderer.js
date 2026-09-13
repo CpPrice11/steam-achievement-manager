@@ -600,7 +600,7 @@ function isAchievementMetadataPlaceholder(achievement) {
 }
 
 function isAchievementHiddenLike(achievement) {
-  return Boolean(achievement?.hidden);
+  return Boolean(achievement?.hidden && isAchievementMetadataPlaceholder(achievement));
 }
 
 function getAchievementPresentation(achievement) {
@@ -1220,6 +1220,7 @@ function formatStatus(value) {
       community: 'Steam Community',
       'loaded-web-api': 'Steam Web API',
       'loaded-public': 'публічний профіль Steam',
+      'loaded-native': 'локальний Steam API',
       'loaded-steamworks-fallback': 'Steamworks',
       'skipped-web-api': 'без Web API',
       unavailable: 'недоступно',
@@ -1234,6 +1235,7 @@ function formatStatus(value) {
       community: 'Steam Community',
       'loaded-web-api': 'Steam Web API',
       'loaded-public': 'public Steam profile',
+      'loaded-native': 'local Steam API',
       'loaded-steamworks-fallback': 'Steamworks',
       'skipped-web-api': 'without Web API',
       unavailable: 'unavailable',
@@ -1288,6 +1290,12 @@ function renderGameDiagnostics() {
       ? (isEnglish ? `error: ${steamworks.error}` : `помилка: ${steamworks.error}`)
       : `AppID ${steamworks.activeAppId || diagnostics.appId} · ${steamworks.installed ? (isEnglish ? 'installed' : 'встановлено') : (isEnglish ? 'not installed' : 'не встановлено')} · ${steamworks.currentLanguage || '-'}`)
     : (isEnglish ? 'not checked yet' : 'ще не перевірено');
+  const native = steamworks?.nativeHelper;
+  const nativeText = native
+    ? (native.error
+      ? (isEnglish ? `error: ${native.error}` : `помилка: ${native.error}`)
+      : `${native.installed ? (isEnglish ? 'installed' : 'встановлено') : (isEnglish ? 'not installed' : 'не встановлено')} · ${native.subscribed ? (isEnglish ? 'owned' : 'є в акаунті') : (isEnglish ? 'not owned' : 'немає в акаунті')} · ${native.currentLanguage || '-'}`)
+    : (isEnglish ? 'not checked yet' : 'ще не перевірено');
 
   elements.gameDiagnostics.className = 'diagnostics-card';
   elements.gameDiagnostics.innerHTML = `
@@ -1302,6 +1310,7 @@ function renderGameDiagnostics() {
       <div><span>DLC ${isEnglish ? 'from Steam Store' : 'зі Steam Store'}</span><strong>${diagnostics.dlcCandidates || 0} ${isEnglish ? 'found' : 'знайдено'} · ${diagnostics.dlcGroups || 0} ${isEnglish ? 'with achievements' : 'з досягненнями'}</strong></div>
       <div><span>${isEnglish ? 'Lock' : 'Блокування'}</span><strong>${escapeHtml(protectedText)}</strong></div>
       <div><span>${isEnglish ? 'Steamworks helper' : 'Steamworks-помічник'}</span><strong>${escapeHtml(steamworksText)}</strong></div>
+      <div><span>${isEnglish ? 'Native helper' : 'Native-помічник'}</span><strong>${escapeHtml(nativeText)}</strong></div>
       <div><span>${isEnglish ? 'Icon / name' : 'Іконки / назва'}</span><strong>${diagnostics.iconCached ? (isEnglish ? 'local cache icon' : 'іконка з локального кешу') : (isEnglish ? 'network icon' : 'іконка з мережі')} · ${diagnostics.suspiciousName ? (isEnglish ? 'suspicious name' : 'назва підозріла') : (isEnglish ? 'name looks normal' : 'назва виглядає нормально')}</strong></div>
       <div><span>${escapeHtml(t('risk'))}</span><strong>${diagnostics.risky ? (isEnglish ? 'online/VAC or anti-cheat sensitive game' : 'онлайн/VAC або античіт-чутлива гра') : (isEnglish ? 'no special risk marker' : 'без спеціальної позначки ризику')}</strong></div>
       <div><span>${isEnglish ? 'Stats' : 'Статистика'}</span><strong>${diagnostics.stats || 0}</strong></div>
