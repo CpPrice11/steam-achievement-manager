@@ -48,6 +48,8 @@
 
 *Мета: прибрати крихке визначення стану досягнень і підготувати основу для SAM parity без повного rewrite.*
 
+Реліз [v0.3.0](https://github.com/CpPrice11/steam-achievement-manager/releases/tag/v0.3.0) опубліковано 2026-09-17 із setup та portable-збірками.
+
 | Що зроблено / робиться |
 |---|
 | **Native achievement states** — `steam-flat-helper.ps1` читає `GetAchievementAndUnlockTime`, щоб бачити реально відкриті досягнення без залежності від public Web API |
@@ -122,4 +124,4 @@ v2.0 ── dashboard · card view · planner · import/export
 
 ---
 
-*Останнє оновлення: 2026-09-13*
+*Останнє оновлення: 2026-09-17*
