@@ -1,7 +1,7 @@
 # Roadmap — Steam Achievement Manager
 
 > Версія документа: 2026-09
-> Поточна версія програми: **v0.6.0**
+> Поточна версія програми: **v0.6.1**
 
 ---
 
@@ -79,11 +79,13 @@
 
 ## ⛔ Блокери наступного релізу
 
+- [x] У v0.6.1 виправлено локальні метадані Portal: schema з багатьма мовами більше не обрізається до `icon`, поле `token` пропускається перед перекладом, а підтверджений `gamename` замінює `App 400`. Перевірено локально: Portal 15/15 назв, описів та іконок; Skyrim 75/75.
+- [x] У v0.6.1 приховано зайвий рядок `Метадані досягнення недоступні: <API name>` у списку досягнень; fallback-назва й опис залишаються.
 - [x] Назви ігор надходять із підтверджених Steam-даних або валідного store fallback; невідомі значення показуються як `App <AppID>`. У 737 локальних записах немає `windows,macos,linux` або `2=Rj`; AppID 72850 успішно отримує назву зі Steam Store.
 - [x] На реальному профілі Skyrim Special Edition native helper прочитав 75/75 станів і рівно 13 відкритих досягнень; schema не позначає їх прихованими.
 - [ ] Завершити runtime matrix: на поточній Windows зі Steam відкритим пройшли Electron, `win-unpacked`, portable і setup; залишились окрема Windows 10 та Steam-closed, який користувач попросив не запускати.
 - [x] Контрольований Spacewar smoke пройшов: `int`, `float`, `AVGRATE` write, stats reset без achievements і no-op achievement write збережені; фінальні stats, achievement states та unlock time не змінилися.
-- [ ] Виконати ручний UI smoke для English/Українська після завершення активної гри; статична parity-перевірка 265/265 ключів пройшла.
+- [ ] Виконати ручний UI smoke для English/Українська після завершення активної гри; статична parity-перевірка 264/264 ключів пройшла.
 - [x] Діагностика гри та `game:load` розрізняють `source`, `warnings`, `errors`, щоб fallback не маскував збій native Steam API.
 
 Регресійні приклади: Skyrim, PRAGMATA, `windows,macos,linux`, `2=Rj`, приватний профіль, неповна відповідь Steam і гра без публічних Web API даних. Перед публікацією: `node --check`, тести, чисті артефакти, smoke-test обох exe та відповідність README фактичному інсталятору.
@@ -127,6 +129,7 @@ v0.6 завершено нижче. Перед релізом окремо ви�
 *Статус: випущено у v0.6.0; native читання, no-op запис і reset на нульових stats Spacewar перевірено.*
 
 Реліз [v0.6.0](https://github.com/CpPrice11/steam-achievement-manager/releases/tag/v0.6.0) містить завершені зміни v0.4–v0.6 у setup та portable-збірках.
+Патч [v0.6.1](https://github.com/CpPrice11/steam-achievement-manager/releases/tag/v0.6.1) виправляє локальні метадані Portal і прибирає зайвий рядок про недоступні метадані.
 
 - [x] Local schema розпізнає реальні Steam типи `INT`, `FLOAT` та `AVGRATE`; невідомі типи не перетворюються на `int`.
 - [x] Native helper читає й записує int/float через Steam API, а average-rate оновлює через `UpdateAvgRateStat(count, sessionLength)`.
