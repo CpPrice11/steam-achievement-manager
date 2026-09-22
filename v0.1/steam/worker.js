@@ -39,29 +39,43 @@ function readStat(client, stat) {
   const name = String(stat.name || '');
   if (!name) return null;
 
-  if (stat.type === 'float') {
+  if (stat.type !== 'int') {
+    const unsupported = !['float', 'avgrate'].includes(stat.type);
     return {
       ...stat,
-      type: 'float',
+      type: stat.type || 'unknown',
       value: null,
       readable: false,
       writable: false,
-      error: 'Float stats are not exposed by steamworks.js 0.4.0.',
+      errorCode: unsupported ? 'unsupported-type' : 'native-helper-required',
+      error: unsupported ? 'Steam returned an unsupported stat type.' : 'This stat type requires the native Steam helper.',
     };
   }
 
   try {
     const intValue = client.stats.getInt(name);
+    const changeProtected = Boolean(stat.changeProtected);
     return {
       ...stat,
       type: 'int',
       value: intValue,
       readable: intValue !== null,
-      writable: intValue !== null,
+      writable: intValue !== null && !changeProtected,
+      changeProtected,
+      source: 'steamworks',
+      errorCode: intValue === null ? 'not-returned' : '',
       error: intValue === null ? 'Steam did not return this stat value.' : '',
     };
   } catch (error) {
-    return { ...stat, type: 'unknown', value: null, readable: false, writable: false, error: error.message };
+    return {
+      ...stat,
+      value: null,
+      readable: false,
+      writable: false,
+      source: 'steamworks',
+      errorCode: 'read-failed',
+      error: error.message,
+    };
   }
 }
 
@@ -105,43 +119,6 @@ process.on('message', async (payload) => {
         };
       });
       send(true, achievements);
-      return;
-    }
-
-    if (payload.action === 'setAchievement') {
-      const ok = payload.achieved
-        ? client.achievement.activate(payload.id)
-        : client.achievement.clear(payload.id);
-      if (!ok) throw new Error('Steam rejected the achievement change.');
-      const stored = client.stats.store();
-      send(true, { id: payload.id, achieved: payload.achieved, stored });
-      return;
-    }
-
-    if (payload.action === 'setAllAchievements') {
-      const names = Array.isArray(payload.achievementIds) ? payload.achievementIds : [];
-      const changed = [];
-      const failed = [];
-
-      for (const id of names) {
-        const ok = payload.achieved
-          ? client.achievement.activate(id)
-          : client.achievement.clear(id);
-
-        if (ok) {
-          changed.push(id);
-        } else {
-          failed.push(id);
-        }
-      }
-
-      const stored = changed.length ? client.stats.store() : false;
-      send(true, {
-        achieved: payload.achieved,
-        changed,
-        failed,
-        stored,
-      });
       return;
     }
 

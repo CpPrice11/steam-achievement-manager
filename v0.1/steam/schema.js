@@ -40,6 +40,7 @@ const STRUCTURAL_KEYS = new Set([
   'type',
   'type_int',
   'type_float',
+  'type_avgrate',
   'display',
   'name',
   'desc',
@@ -98,8 +99,16 @@ async function requestText(url) {
   return response.text();
 }
 
+function normalizeStatType(value, fallback = 'unknown') {
+  const normalized = String(value || '').trim().toLowerCase().replace(/^type_/, '');
+  if (normalized === 'int' || normalized === 'integer' || normalized === 'int32') return 'int';
+  if (normalized === 'float' || normalized === 'double') return 'float';
+  if (normalized === 'avgrate' || normalized === 'average-rate' || normalized === 'average_rate') return 'avgrate';
+  return fallback;
+}
+
 function inferStatType(stat) {
-  if (typeof stat.type === 'string') return stat.type.toLowerCase();
+  if (typeof stat.type === 'string') return normalizeStatType(stat.type);
   const defaultValue = Number(stat.defaultvalue ?? stat.default ?? 0);
   return Number.isInteger(defaultValue) ? 'int' : 'float';
 }
@@ -137,13 +146,14 @@ function normalizeSchema(data) {
       minValue: stat.min !== undefined ? Number(stat.min) : null,
       maxValue: stat.max !== undefined ? Number(stat.max) : null,
       incrementOnly: Boolean(stat.incrementonly || stat.incrementOnly),
+      changeProtected: isProtectedPermission(stat.permission),
     })).filter((stat) => stat.name),
   };
 }
 
 function extractStrings(buffer) {
   const source = buffer.toString('utf8');
-  return [...source.matchAll(/[\p{L}\p{N}\p{P}\p{S} ][\p{L}\p{N}\p{P}\p{S} ]{1,}/gu)]
+  return [...source.matchAll(/[\p{L}\p{N}\p{P}\p{S} ][\p{L}\p{N}\p{P}\p{S} ]{0,}/gu)]
     .map((match) => match[0].trim())
     .filter(Boolean);
 }
@@ -205,7 +215,12 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
     const changeProtected = permissionIndex !== -1 && isProtectedPermission(block[permissionIndex + 1]);
     const hidden = hiddenIndex !== -1 && Number(block[hiddenIndex + 1] || 0) === 1;
 
-    const displayName = readLocalized(block, displayIndex + 2, language) || apiName;
+    const directDisplayName = block[displayIndex + 2] || '';
+    const displayName = readLocalized(block, displayIndex + 2, language) ||
+      (!LANGUAGE_KEYS.has(directDisplayName.toLowerCase()) && !STRUCTURAL_KEYS.has(directDisplayName.toLowerCase())
+        ? directDisplayName
+        : '') ||
+      apiName;
     const description = descIndex === -1 ? '' : readLocalized(block, descIndex + 1, language);
     const iconFile = iconIndex === -1 ? '' : block[iconIndex + 1] || '';
     const iconGrayFile = iconGrayIndex === -1 ? '' : block[iconGrayIndex + 1] || '';
@@ -224,11 +239,17 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
         metadataIncomplete: false,
       });
     } else {
+      const typeIndex = block.indexOf('type');
+      const rawType = typeIndex === -1
+        ? (block.includes('type_avgrate') ? 'avgrate' : (block.includes('type_float') ? 'float' : 'int'))
+        : block[typeIndex + 1];
       stats.push({
         name: apiName,
         displayName,
         defaultValue: 0,
-        type: block.includes('type_float') ? 'float' : 'int',
+        type: normalizeStatType(rawType),
+        incrementOnly: block.includes('incrementonly') && Number(block[block.indexOf('incrementonly') + 1] || 0) !== 0,
+        changeProtected,
       });
     }
   }
@@ -416,10 +437,12 @@ function mergeSchemas(primary, fallback) {
     for (const stat of schema?.stats || []) {
       const name = stat.name || '';
       if (!name) continue;
+      const existing = statsByName.get(name) || {};
       statsByName.set(name, {
-        ...(statsByName.get(name) || {}),
+        ...existing,
         ...stat,
-        displayName: stat.displayName || statsByName.get(name)?.displayName || name,
+        displayName: stat.displayName || existing.displayName || name,
+        changeProtected: Boolean(stat.changeProtected || existing.changeProtected),
       });
     }
   }
@@ -470,4 +493,4 @@ async function getGameSchema(appId, apiKey = '', language = 'english', libraries
     : { status: local.status || web.status || 'empty', achievements: [], stats: [] };
 }
 
-module.exports = { getGameSchema, getLocalGameSchema };
+module.exports = { getGameSchema, getLocalGameSchema, normalizeStatType };

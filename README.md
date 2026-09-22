@@ -25,8 +25,8 @@
 
 Завантаж останню збірку зі [**сторінки релізів**](https://github.com/CpPrice11/steam-achievement-manager/releases/latest):
 
-- **`Steam Achievement Manager Setup X.Y.Z.exe`** — інсталятор з майстром встановлення. Створює ярлик у меню Пуск і коректно видаляється через "Програми та компоненти". Рекомендовано для більшості користувачів.
-- **`Steam Achievement Manager X.Y.Z.exe`** — портативна версія. Без встановлення — скачав і запустив.
+- **`SteamAchievementManager-vX.Y.Z-setup.exe`** — one-click інсталятор для поточного користувача. Створює ярлик у меню Пуск і видаляється через "Програми та компоненти". Рекомендовано для більшості користувачів.
+- **`SteamAchievementManager-vX.Y.Z-portable.exe`** — портативна версія без встановлення.
 
 Обидві збірки самодостатні і не потребують Node.js, npm чи будь-яких інших залежностей.
 
@@ -37,7 +37,20 @@
 ```powershell
 npm install
 npm run start    # запуск у режимі розробки
-npm run dist     # збірка portable + NSIS-інсталятора у dist/
+npm run dist     # збірка NSIS-інсталятора у Setup/ та portable у Portable/
+```
+
+## Структура коду
+
+```text
+v0.1/
+├─ main.js, preload.js       Electron entrypoints та IPC
+├─ renderer.js, index.html   інтерфейс
+├─ styles.css                стилі інтерфейсу
+├─ domain/                   чиста логіка станів, DLC і діагностики
+├─ steam/                    Steam library, Store, schema, worker і native helper
+├─ tests/                    unit tests
+└─ assets/                   іконки застосунку
 ```
 
 ## Примітки

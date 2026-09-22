@@ -1043,7 +1043,7 @@ body.theme-light .achievement-icon.blank {
 
 .stat-row {
   display: grid;
-  grid-template-columns: 1fr 84px 120px 48px;
+  grid-template-columns: minmax(0, 1fr) 84px minmax(180px, 240px) 48px;
   gap: 10px;
   align-items: center;
   min-height: 56px;
@@ -1054,6 +1054,20 @@ body.theme-light .achievement-icon.blank {
 .stat-row input,
 .stat-row select,
 .stat-row button { height: 30px; padding: 0 8px; }
+
+.stat-value-input,
+.stat-value-input input { width: 100%; min-width: 0; }
+
+.stat-average-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.stat-average-inputs input { width: 100%; min-width: 0; }
+
+.stat-row.readonly { opacity: 0.74; }
 
 .stat-name { display: grid; gap: 3px; min-width: 0; }
 
@@ -1252,6 +1266,132 @@ body.sidebar-dragging .sidebar-resizer {
 body.sidebar-dragging {
   cursor: col-resize !important;
   user-select: none;
+}
+
+/* ─── Dialog ────────────────────────────────────────────────────── */
+.app-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.app-dialog::backdrop {
+  background: rgba(10, 16, 24, 0.76);
+}
+
+.app-dialog-content {
+  display: grid;
+  gap: 14px;
+  max-height: calc(100vh - 50px);
+  margin: 0;
+  padding: 20px;
+}
+
+.app-dialog h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+.app-dialog p {
+  max-height: min(38vh, 300px);
+  margin: 0;
+  overflow: auto;
+  color: var(--muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog-diff {
+  display: grid;
+  max-height: min(34vh, 280px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.app-dialog-diff.hidden { display: none; }
+
+.app-dialog-diff-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-dialog-diff-name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-dialog-diff-states {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) 14px minmax(82px, auto);
+  align-items: center;
+  gap: 4px;
+}
+
+.app-dialog-diff-state {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.app-dialog-diff-state.unlocked { color: var(--accent-2); }
+.app-dialog-diff-state.locked { color: var(--danger); }
+.app-dialog-diff-state.unknown { color: var(--warning); }
+.app-dialog-diff-arrow { color: var(--muted); text-align: center; }
+
+.app-dialog-diff-more {
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .app-dialog-diff-row { grid-template-columns: 1fr; gap: 5px; }
+  .app-dialog-diff-states { grid-template-columns: 1fr 14px 1fr; }
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-dialog-actions button {
+  min-width: 92px;
+  min-height: 34px;
+  padding: 6px 14px;
+}
+
+.app-dialog-confirm {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.app-dialog[data-tone="danger"] .app-dialog-confirm {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.app-dialog-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ─── Toast notifications ────────────────────────────────────────── */

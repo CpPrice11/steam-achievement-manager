@@ -13,8 +13,6 @@ contextBridge.exposeInMainWorld('sam', {
   cacheImage: (urls) => ipcRenderer.invoke('app:cacheImage', urls),
   diagnoseLibrary: () => ipcRenderer.invoke('app:diagnoseLibrary'),
   loadGame: (payload) => ipcRenderer.invoke('game:load', payload),
-  setAchievement: (payload) => ipcRenderer.invoke('achievement:set', payload),
-  setAllAchievements: (payload) => ipcRenderer.invoke('achievement:setAll', payload),
   applyAchievementChanges: (payload) => ipcRenderer.invoke('achievement:applyChanges', payload),
   readStats: (payload) => ipcRenderer.invoke('stats:read', payload),
   setStat: (payload) => ipcRenderer.invoke('stats:set', payload),

@@ -5,9 +5,18 @@ const fs = require('fs/promises');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 
-const { findSteamLibraries, readInstalledGames } = require('./steam-library');
-const { getGameSchema, getLocalGameSchema } = require('./schema');
-const { getAchievementDlcSource } = require('./dlc-classifier');
+const { findSteamRoot, findSteamLibraries, readInstalledGames } = require('./steam/library');
+const { getAppDetails } = require('./steam/store');
+const { discoverDlcAppIds } = require('./steam/dlc-discovery');
+const { getGameSchema, getLocalGameSchema, normalizeStatType } = require('./steam/schema');
+const { getGameProvenance } = require('./domain/game-provenance');
+const { getAchievementDlcSource } = require('./domain/dlc-classifier');
+const {
+  makeAchievementStateFallback,
+  mergeKnownAchievementStates,
+  countKnownAchievementStates,
+  normalizeAchievementState,
+} = require('./domain/achievement-state');
 
 const ALLOWED_LANGUAGES = ['ukrainian', 'english'];
 const ALLOWED_THEMES = ['dark', 'light', 'system'];
@@ -22,6 +31,8 @@ function pickAllowed(value, allowed, fallback) {
 }
 
 let mainWindow;
+const protectedAchievementsByAppId = new Map();
+const statsByAppId = new Map();
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -78,7 +89,7 @@ function isSteamRunning() {
 
 function runSteamWorker(payload) {
   return new Promise((resolve, reject) => {
-    const workerPath = getUnpackedPath('v0.1', 'steam-worker.js');
+    const workerPath = getUnpackedPath('v0.1', 'steam', 'worker.js');
     const child = fork(workerPath, [], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
       execPath: process.execPath,
@@ -90,7 +101,7 @@ function runSteamWorker(payload) {
     let stderr = '';
     const timeoutMs = Number(payload.timeoutMs) > 0
       ? Number(payload.timeoutMs)
-      : (payload.action === 'setAllAchievements' || payload.action === 'setAchievementChanges' ? 90000 : 25000);
+      : (payload.action === 'setAchievementChanges' ? 90000 : 25000);
     const timeout = setTimeout(() => {
       if (settled) return;
       settled = true;
@@ -142,14 +153,15 @@ function getUnpackedPath(...parts) {
 }
 
 function getSteamFlatHelperPath() {
-  return getUnpackedPath('v0.1', 'helpers', 'steam-flat-helper.ps1');
+  return getUnpackedPath('v0.1', 'steam', 'helpers', 'steam-flat-helper.ps1');
 }
 
 function getSteamApiDllPath() {
   return getUnpackedPath('node_modules', 'steamworks.js', 'dist', 'win64', 'steam_api64.dll');
 }
 
-function runSteamFlatHelper(appId, input = [], action = 'apply', options = {}) {
+async function runSteamFlatHelper(appId, input = [], action = 'apply', options = {}) {
+  const steamInstallPath = await findSteamRoot();
   return new Promise((resolve, reject) => {
     const helperPath = getSteamFlatHelperPath();
     const steamApiDll = getSteamApiDllPath();
@@ -167,6 +179,7 @@ function runSteamFlatHelper(appId, input = [], action = 'apply', options = {}) {
       env: {
         ...process.env,
         STEAM_API_DLL: steamApiDll,
+        STEAM_INSTALL_PATH: steamInstallPath,
       },
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -446,20 +459,6 @@ async function readOwnedGamesFromWebApi(apiKey, steamId64) {
   }
 }
 
-function makeAchievementStateFallback(achievementIds) {
-  return new Map(achievementIds.map((id) => [String(id), { achieved: false, unlockTime: 0 }]));
-}
-
-function normalizeAchievementState(value) {
-  if (value && typeof value === 'object') {
-    return {
-      achieved: Boolean(value.achieved),
-      unlockTime: Number(value.unlockTime || value.unlocktime || 0) || 0,
-    };
-  }
-  return { achieved: Boolean(value), unlockTime: 0 };
-}
-
 async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiKey, steamId64) {
   const ids = Array.isArray(achievementIds)
     ? achievementIds.map((id) => String(id)).filter(Boolean)
@@ -472,6 +471,9 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
 
   const key = String(apiKey || '').trim();
   const attempts = key ? [key, ''] : [''];
+  const combined = makeAchievementStateFallback(ids);
+  let sourceStatus = '';
+  let returnedCount = 0;
 
   for (const attemptKey of attempts) {
     const params = new URLSearchParams({
@@ -488,30 +490,34 @@ async function readPlayerAchievementStatesFromWebApi(appId, achievementIds, apiK
         : [];
       if (!achievements.length) continue;
 
-      const states = new Map(fallback);
-      let matched = 0;
+      const states = makeAchievementStateFallback(ids);
       for (const achievement of achievements) {
         const id = String(achievement.apiname || achievement.name || '').trim();
-        if (!id) continue;
-        if (wanted.has(id)) matched += 1;
+        if (!wanted.has(id) || ![true, false, 0, 1, '0', '1'].includes(achievement.achieved)) continue;
         states.set(id, {
           achieved: achievement.achieved === true || Number(achievement.achieved || 0) === 1,
           unlockTime: Number(achievement.unlocktime || achievement.unlockTime || 0) || 0,
+          known: true,
         });
       }
 
-      return {
-        status: attemptKey ? 'loaded-web-api' : 'loaded-public',
-        states,
-        matchedCount: matched,
-        returnedCount: achievements.length,
-      };
+      if (!countKnownAchievementStates(states)) continue;
+      mergeKnownAchievementStates(combined, states);
+      sourceStatus = sourceStatus || (attemptKey ? 'loaded-web-api' : 'loaded-public');
+      returnedCount = Math.max(returnedCount, achievements.length);
+      const matchedCount = countKnownAchievementStates(combined);
+      if (matchedCount === ids.length) {
+        return { status: sourceStatus, states: combined, matchedCount, returnedCount };
+      }
     } catch {
       // Private profiles and some games reject this endpoint; keep the app read-only instead of starting the game app through Steamworks.
     }
   }
 
-  return { status: 'unavailable', states: fallback, matchedCount: 0, returnedCount: 0 };
+  const matchedCount = countKnownAchievementStates(combined);
+  return matchedCount
+    ? { status: 'partial-web-api', states: combined, matchedCount, returnedCount }
+    : { status: 'unavailable', states: fallback, matchedCount: 0, returnedCount: 0 };
 }
 
 async function readPlayerAchievementStatesFromNative(appId, achievementIds, options = {}) {
@@ -524,23 +530,24 @@ async function readPlayerAchievementStatesFromNative(appId, achievementIds, opti
   const result = await runSteamFlatHelper(appId, ids, 'states', {
     timeoutMs: Number(options.timeoutMs || 30000),
   });
-  let readable = 0;
+  const wanted = new Set(ids);
   for (const achievement of result.achievements || []) {
     const id = String(achievement?.id || '').trim();
-    if (!id) continue;
-    if (!achievement.error) readable += 1;
+    if (!wanted.has(id) || achievement.error || typeof achievement.achieved !== 'boolean') continue;
     states.set(id, {
       achieved: Boolean(achievement.achieved),
       unlockTime: Number(achievement.unlockTime || 0) || 0,
+      known: true,
     });
   }
 
+  const readable = countKnownAchievementStates(states);
   if (!readable) {
     throw new Error('Steam did not return achievement states for this app.');
   }
 
   return {
-    status: 'loaded-native',
+    status: readable === ids.length ? 'loaded-native' : 'partial-native',
     states,
     nativeReadCount: readable,
     nativeReturnedCount: (result.achievements || []).length,
@@ -560,15 +567,16 @@ async function readPlayerAchievementStatesFromSteamworks(appId, achievementIds, 
   const states = makeAchievementStateFallback(ids);
   for (const achievement of steamworksStates || []) {
     const id = String(achievement?.id || '').trim();
-    if (id) {
+    if (states.has(id) && achievement.achieved === true) {
       states.set(id, {
-        achieved: Boolean(achievement.achieved),
+        achieved: true,
         unlockTime: Number(achievement.unlockTime || 0) || 0,
+        known: true,
       });
     }
   }
   return {
-    status: 'loaded-steamworks-fallback',
+    status: countKnownAchievementStates(states) === ids.length ? 'loaded-steamworks-fallback' : 'partial-steamworks',
     states,
   };
 }
@@ -582,10 +590,20 @@ async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamI
   const preferNative = options.preferNative !== false;
   const allowSteamworksFallback = options.allowSteamworksFallback !== false;
   const errors = [];
+  const states = makeAchievementStateFallback(ids);
+  const sources = [];
+  const addResult = (result) => {
+    const before = countKnownAchievementStates(states);
+    mergeKnownAchievementStates(states, result.states);
+    if (countKnownAchievementStates(states) > before) sources.push(result.status);
+  };
 
   if (preferNative) {
     try {
-      return await readPlayerAchievementStatesFromNative(appId, ids, options);
+      addResult(await readPlayerAchievementStatesFromNative(appId, ids, options));
+      if (countKnownAchievementStates(states) === ids.length) {
+        return { status: 'loaded-native', states, errors, sources };
+      }
     } catch (error) {
       errors.push(`native: ${error.message}`);
     }
@@ -593,7 +611,10 @@ async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamI
 
   if (allowSteamworksFallback) {
     try {
-      return await readPlayerAchievementStatesFromSteamworks(appId, ids, options);
+      addResult(await readPlayerAchievementStatesFromSteamworks(appId, ids, options));
+      if (countKnownAchievementStates(states) === ids.length) {
+        return { status: sources.length > 1 ? 'loaded-mixed' : 'loaded-steamworks-fallback', states, errors, sources };
+      }
     } catch (error) {
       errors.push(`steamworks: ${error.message}`);
     }
@@ -603,10 +624,17 @@ async function readPlayerAchievementStates(appId, achievementIds, apiKey, steamI
   const webResult = canUseWebApi
     ? await readPlayerAchievementStatesFromWebApi(appId, ids, apiKey, steamId64)
     : { status: ids.length ? 'skipped-web-api' : 'empty', states: makeAchievementStateFallback(ids) };
+  addResult(webResult);
+  const knownCount = countKnownAchievementStates(states);
 
   return {
-    ...webResult,
+    status: knownCount === ids.length
+      ? (sources.length > 1 ? 'loaded-mixed' : webResult.status)
+      : (knownCount ? 'partial' : webResult.status),
+    states,
     errors,
+    sources,
+    knownCount,
   };
 }
 
@@ -686,9 +714,10 @@ function getStoreIconFromDetails(appId, details) {
 
 async function enrichGameListWithStoreDetails(games) {
   const appIds = games
+    .filter((game) => isSuspiciousGameName(game.name, game.appId))
     .map((game) => Number(game.appId))
     .filter((appId) => Number.isInteger(appId) && appId > 0);
-  const details = await getAppDetails(appIds);
+  const details = await getAppDetails(appIds, fetchJson);
   const enriched = [];
 
   for (const game of games) {
@@ -867,7 +896,11 @@ function makeGameDiagnostics(game, result) {
     iconCached: String(game?.icon || '').startsWith('file:'),
     schemaStatus: String(result?.schemaStatus || ''),
     stateStatus: String(result?.stateStatus || ''),
+    dataSource: result?.source || { schema: '', achievementStates: [] },
+    warnings: result?.warnings || [],
+    errors: result?.errors || [],
     achievements: achievements.length,
+    verifiedAchievements: achievements.filter((achievement) => achievement.stateKnown !== false).length,
     baseAchievements: achievements.length - dlcCount,
     dlcAchievements: dlcCount,
     dlcCandidates: Number(result?.dlcCount || 0),
@@ -924,127 +957,8 @@ function withTimeout(promise, timeoutMs, fallbackValue) {
   ]).finally(() => clearTimeout(timeout));
 }
 
-function extractDlcAppIdsFromStoreHtml(html, baseAppId) {
-  const ids = new Set();
-  const source = String(html || '');
-  const patterns = [
-    /href="https?:\/\/store\.steampowered\.com\/app\/(\d+)\//gi,
-    /data-ds-appid="(\d+)"/gi,
-    /data-ds-itemkey="App_(\d+)"/gi,
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(source))) {
-      const appId = Number(match[1]);
-      if (Number.isInteger(appId) && appId > 0 && appId !== baseAppId) {
-        ids.add(appId);
-      }
-    }
-  }
-
-  return [...ids];
-}
-
-async function getStoreDlcAppIds(appId) {
-  const urls = [
-    `https://store.steampowered.com/api/appdetails?appids=${appId}&filters=dlc,basic`,
-    `https://store.steampowered.com/api/appdetails?appids=${appId}`,
-  ];
-
-  for (const url of urls) {
-    try {
-      const body = await fetchJson(url);
-      const data = body?.[String(appId)]?.data || {};
-      const dlc = Array.isArray(data.dlc) ? data.dlc : [];
-      if (dlc.length) {
-        return dlc
-          .map((value) => Number(value))
-          .filter((value) => Number.isInteger(value) && value > 0);
-      }
-    } catch {
-      // Try the next public Store endpoint shape.
-    }
-  }
-
-  return [];
-}
-
-async function getStoreDlcPageAppIds(appId) {
-  const pages = [
-    `https://store.steampowered.com/dlc/${appId}/?l=english`,
-    `https://store.steampowered.com/app/${appId}/?l=english`,
-  ];
-
-  const ids = new Set();
-  for (const page of pages) {
-    try {
-      for (const dlcAppId of extractDlcAppIdsFromStoreHtml(await fetchText(page), appId)) {
-        ids.add(dlcAppId);
-      }
-    } catch {
-      // Some games have no DLC page, or Steam can block the page temporarily.
-    }
-  }
-
-  return [...ids];
-}
-
-async function getGameDlcAppIds(appId) {
-  const ids = new Set();
-
-  for (const dlcAppId of await getStoreDlcAppIds(appId)) {
-    ids.add(dlcAppId);
-  }
-
-  for (const dlcAppId of await getStoreDlcPageAppIds(appId)) {
-    ids.add(dlcAppId);
-  }
-
-  return [...ids].slice(0, 250);
-}
-
-const appDetailsCache = new Map();
-
-async function getAppDetails(appIds) {
-  const details = new Map();
-  if (!appIds.length) return details;
-
-  const missing = [];
-  const seen = new Set();
-  for (const rawAppId of appIds) {
-    const appId = Number(rawAppId);
-    if (!Number.isInteger(appId) || appId <= 0 || seen.has(appId)) continue;
-    seen.add(appId);
-    if (appDetailsCache.has(appId)) {
-      const cached = appDetailsCache.get(appId);
-      if (cached) details.set(appId, cached);
-    } else {
-      missing.push(appId);
-    }
-  }
-
-  const chunkSize = 50;
-  for (let index = 0; index < missing.length; index += chunkSize) {
-    const chunk = missing.slice(index, index + chunkSize);
-    try {
-      const url = `https://store.steampowered.com/api/appdetails?appids=${chunk.join(',')}&filters=basic`;
-      const body = await fetchJson(url);
-      for (const appId of chunk) {
-        const data = body?.[String(appId)]?.data || null;
-        appDetailsCache.set(appId, data);
-        if (data) details.set(appId, data);
-      }
-    } catch {
-      // Don't cache on chunk failure so a future call can retry.
-    }
-  }
-
-  return details;
-}
-
 async function getValidatedDlcDetails(baseAppId, appIds) {
-  const rawDetails = await getAppDetails(appIds);
+  const rawDetails = await getAppDetails(appIds, fetchJson);
   const details = new Map();
 
   for (const appId of appIds) {
@@ -1106,7 +1020,7 @@ ipcMain.handle('app:listGames', async (_event, payload = {}) => {
   const localGames = await readInstalledGames(libraries, { includeLocalConfig: true });
   const settings = await readSettings();
   const apiKey = String(payload?.apiKey || settings.apiKey || '').trim();
-  const enrichedLocalGames = await withTimeout(enrichGameListWithStoreDetails(localGames), 12000, localGames);
+  const enrichedLocalGames = await withTimeout(enrichGameListWithStoreDetails(localGames), 20000, localGames);
   if (!apiKey) return enrichedLocalGames;
 
   const profile = await getCurrentSteamProfile();
@@ -1115,7 +1029,7 @@ ipcMain.handle('app:listGames', async (_event, payload = {}) => {
 
   try {
     const ownedGames = await readOwnedGamesFromWebApi(apiKey, steamId64);
-    return await withTimeout(enrichGameListWithStoreDetails(mergeGameLists(enrichedLocalGames, ownedGames)), 12000, mergeGameLists(enrichedLocalGames, ownedGames));
+    return await withTimeout(enrichGameListWithStoreDetails(mergeGameLists(enrichedLocalGames, ownedGames)), 20000, mergeGameLists(enrichedLocalGames, ownedGames));
   } catch {
     return enrichedLocalGames;
   }
@@ -1180,7 +1094,13 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
   }
 
   const libraries = await findSteamLibraries();
+  protectedAchievementsByAppId.delete(numericAppId);
+  statsByAppId.delete(numericAppId);
   const schema = await getGameSchema(numericAppId, apiKey, language, libraries);
+  protectedAchievementsByAppId.set(numericAppId, new Set(
+    (schema.achievements || []).filter((achievement) => achievement.changeProtected).map((achievement) => achievement.name)
+  ));
+  statsByAppId.set(numericAppId, new Map((schema.stats || []).map((stat) => [stat.name, stat])));
   const baseAchievementIds = (schema.achievements || []).map((achievement) => achievement.name);
   const steamId = String(steamId64 || '').trim();
   const baseStates = await readPlayerAchievementStates(numericAppId, baseAchievementIds, apiKey, steamId);
@@ -1190,6 +1110,7 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
       id,
       achieved: state.achieved,
       unlockTime: state.unlockTime,
+      stateKnown: state.known,
     };
   });
 
@@ -1213,17 +1134,34 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
     };
   });
 
-  const dlcCandidates = await withTimeout(getGameDlcAppIds(numericAppId), 7000, []);
-  const dlcDetails = await withTimeout(getValidatedDlcDetails(numericAppId, dlcCandidates), 7000, new Map());
+  const dlcDiscoveryWarnings = [];
+  const discoveredDlc = await withTimeout(discoverDlcAppIds(numericAppId, fetchJson, fetchText), 7000, null);
+  if (discoveredDlc === null) dlcDiscoveryWarnings.push('DLC discovery timed out.');
+  else dlcDiscoveryWarnings.push(...discoveredDlc.warnings);
+  const dlcCandidates = discoveredDlc?.ids || [];
+  const validatedDlc = dlcCandidates.length
+    ? await withTimeout(getValidatedDlcDetails(numericAppId, dlcCandidates), 7000, null)
+    : new Map();
+  if (validatedDlc === null) dlcDiscoveryWarnings.push('DLC details timed out.');
+  const dlcDetails = validatedDlc || new Map();
   const dlcAppIds = [...dlcDetails.keys()];
   const baseAchievementIdSet = new Set(baseAchievementIds);
 
   const dlcResults = await Promise.all(dlcAppIds.map(async (dlcAppId) => {
     try {
+      protectedAchievementsByAppId.delete(dlcAppId);
       const dlcSchema = await getGameSchema(dlcAppId, apiKey, language, libraries);
+      protectedAchievementsByAppId.set(dlcAppId, new Set(
+        (dlcSchema.achievements || []).filter((achievement) => achievement.changeProtected).map((achievement) => achievement.name)
+      ));
       const dlcIds = (dlcSchema.achievements || []).map((achievement) => achievement.name);
-      if (!dlcIds.length) return [];
-      if (dlcIds.every((id) => baseAchievementIdSet.has(id))) return [];
+      if (!dlcIds.length) {
+        const provenance = getGameProvenance(dlcSchema, null, []);
+        return { appId: dlcAppId, achievements: [], provenance: provenance.errors.length ? provenance : null };
+      }
+      if (dlcIds.every((id) => baseAchievementIdSet.has(id))) {
+        return { appId: dlcAppId, achievements: [], provenance: null };
+      }
 
       const dlcStates = await readPlayerAchievementStates(dlcAppId, dlcIds, apiKey, steamId, {
         allowSteamworksFallback: false,
@@ -1231,13 +1169,14 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
       const dlcSchemaById = new Map((dlcSchema.achievements || []).map((item) => [item.name, item]));
       const sourceAppName = dlcDetails.get(dlcAppId)?.name || `DLC ${dlcAppId}`;
 
-      return dlcIds.map((id) => {
+      const achievements = dlcIds.map((id) => {
         const state = normalizeAchievementState(dlcStates.states.get(id));
         const meta = dlcSchemaById.get(id) || {};
         return {
           id,
           achieved: state.achieved,
           unlockTime: state.unlockTime,
+          stateKnown: state.known,
           appId: dlcAppId,
           sourceAppId: dlcAppId,
           sourceAppName,
@@ -1251,14 +1190,27 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
           iconGray: meta.iconGray || '',
         };
       });
-    } catch {
-      // DLC schema availability varies a lot between games.
-      return [];
+      return {
+        appId: dlcAppId,
+        achievements,
+        provenance: getGameProvenance(dlcSchema, dlcStates, dlcIds),
+      };
+    } catch (error) {
+      return {
+        appId: dlcAppId,
+        achievements: [],
+        provenance: {
+          source: { schema: 'unavailable', achievementStates: [] },
+          warnings: [],
+          errors: [error.message || String(error)],
+        },
+      };
     }
   }));
-  const dlcAchievements = dlcResults.flat();
+  const dlcAchievements = dlcResults.flatMap((entry) => entry.achievements);
 
   const result = {
+    ...getGameProvenance(schema, baseStates, baseAchievementIds, dlcResults),
     schemaStatus: schema.status,
     stateStatus: baseStates.status,
     achievements: [...mergedAchievements, ...dlcAchievements],
@@ -1266,34 +1218,9 @@ ipcMain.handle('game:load', async (_event, { appId, apiKey, language, steamId64 
     dlcCount: dlcCandidates.length,
     dlcAchievementCount: dlcAchievements.length,
   };
+  result.warnings.push(...dlcDiscoveryWarnings);
   result.diagnostics = makeGameDiagnostics({ appId: numericAppId }, result);
   return result;
-});
-
-ipcMain.handle('achievement:set', async (_event, { appId, id, achieved }) => {
-  return runSteamWorker({
-    action: 'setAchievement',
-    appId: Number(appId),
-    id: String(id),
-    achieved: Boolean(achieved),
-  });
-});
-
-ipcMain.handle('achievement:setAll', async (_event, { appId, achievementIds, achieved }) => {
-  const ids = Array.isArray(achievementIds)
-    ? achievementIds.map((id) => String(id)).filter(Boolean)
-    : [];
-
-  if (!ids.length) {
-    throw new Error('No achievements are available for this game.');
-  }
-
-  return runSteamWorker({
-    action: 'setAllAchievements',
-    appId: Number(appId),
-    achievementIds: ids,
-    achieved: Boolean(achieved),
-  });
 });
 
 ipcMain.handle('achievement:applyChanges', async (_event, { appId, changes }) => {
@@ -1312,14 +1239,18 @@ ipcMain.handle('achievement:applyChanges', async (_event, { appId, changes }) =>
   }
 
   const groups = new Map();
+  const failed = [];
   for (const change of normalizedChanges) {
     if (!Number.isInteger(change.appId) || change.appId <= 0) continue;
+    if (protectedAchievementsByAppId.get(change.appId)?.has(change.id)) {
+      failed.push({ ...change, reason: 'Steam schema marks this achievement as read-only.' });
+      continue;
+    }
     if (!groups.has(change.appId)) groups.set(change.appId, []);
     groups.get(change.appId).push({ id: change.id, achieved: change.achieved });
   }
 
   const changed = [];
-  const failed = [];
   const baseAppId = Number(appId);
   for (const [groupAppId, groupChanges] of groups) {
     const result = await applyAchievementChangeGroupWithRetries(groupAppId, groupChanges);
@@ -1337,29 +1268,129 @@ ipcMain.handle('achievement:applyChanges', async (_event, { appId, changes }) =>
   return { changed, failed, stored: changed.length > 0 };
 });
 
-ipcMain.handle('stats:read', async (_event, { appId, stats }) => {
-  return runSteamWorker({
-    action: 'readStats',
-    appId: Number(appId),
-    stats: Array.isArray(stats) ? stats : [],
-  });
+async function readStatsWithFallback(appId, stats) {
+  const requested = stats
+    .filter((stat) => stat?.name)
+    .map((stat) => ({ ...stat, type: normalizeStatType(stat.type) }));
+
+  try {
+    const native = await runSteamFlatHelper(appId, requested, 'stats-read');
+    const nativeByName = new Map((native.stats || []).map((stat) => [stat.name, stat]));
+    const unreadableInts = requested.filter((stat) => {
+      const result = nativeByName.get(stat.name);
+      return stat.type === 'int' && result?.readable !== true;
+    });
+    const fallback = unreadableInts.length
+      ? await runSteamWorker({ action: 'readStats', appId, stats: unreadableInts }).catch(() => [])
+      : [];
+    const fallbackByName = new Map(fallback.map((stat) => [stat.name, stat]));
+
+    return requested.map((stat) => {
+      const nativeStat = nativeByName.get(stat.name);
+      const fallbackStat = fallbackByName.get(stat.name);
+      const result = fallbackStat?.readable ? fallbackStat : nativeStat;
+      return {
+        ...stat,
+        ...(result || {}),
+        type: stat.type,
+        changeProtected: Boolean(stat.changeProtected),
+        writable: Boolean(result?.writable) && !stat.changeProtected,
+        source: result?.source || 'native-helper',
+        errorCode: result?.errorCode || (result?.readable ? '' : 'not-returned'),
+      };
+    });
+  } catch (nativeError) {
+    const fallback = await runSteamWorker({ action: 'readStats', appId, stats: requested });
+    return fallback.map((stat) => ({
+      ...stat,
+      nativeError: nativeError.message,
+    }));
+  }
+}
+
+ipcMain.handle('stats:read', async (_event, { appId }) => {
+  const numericAppId = Number(appId);
+  if (!Number.isInteger(numericAppId) || numericAppId <= 0) throw new Error('Invalid AppID.');
+  const schemaStats = [...(statsByAppId.get(numericAppId)?.values() || [])];
+  return readStatsWithFallback(numericAppId, schemaStats);
 });
 
-ipcMain.handle('stats:set', async (_event, { appId, name, type, value }) => {
-  return runSteamWorker({
-    action: 'setStat',
-    appId: Number(appId),
-    name: String(name),
-    statType: type === 'float' ? 'float' : 'int',
-    value: Number(value),
-  });
+ipcMain.handle('stats:set', async (_event, { appId, name, value, count, sessionLength }) => {
+  const numericAppId = Number(appId);
+  const statName = String(name || '');
+  const stat = statsByAppId.get(numericAppId)?.get(statName);
+  if (!Number.isInteger(numericAppId) || numericAppId <= 0 || !stat) {
+    throw new Error('Invalid stat change.');
+  }
+  if (stat?.changeProtected) {
+    throw new Error('Steam schema marks this stat as read-only.');
+  }
+  const statType = normalizeStatType(stat.type);
+  if (!['int', 'float', 'avgrate'].includes(statType)) {
+    throw new Error('Unsupported stat type.');
+  }
+  const numericValue = Number(value);
+  const numericCount = Number(count);
+  const numericSessionLength = Number(sessionLength);
+  const invalidAverageRate = statType === 'avgrate' &&
+    (!Number.isFinite(numericCount) || numericCount < 0 || !Number.isFinite(numericSessionLength) || numericSessionLength <= 0);
+  const invalidInt = statType === 'int' &&
+    (!Number.isInteger(numericValue) || numericValue < -2147483648 || numericValue > 2147483647);
+  const invalidFloat = statType === 'float' &&
+    (!Number.isFinite(numericValue) || Math.abs(numericValue) > 3.4028235e38);
+  const belowMin = statType !== 'avgrate' && stat.minValue !== null && stat.minValue !== undefined &&
+    numericValue < Number(stat.minValue);
+  const aboveMax = statType !== 'avgrate' && stat.maxValue !== null && stat.maxValue !== undefined &&
+    numericValue > Number(stat.maxValue);
+  if (!statName || invalidAverageRate || invalidInt || invalidFloat || belowMin || aboveMax) {
+    throw new Error('Invalid stat change.');
+  }
+
+  const change = {
+    name: statName,
+    type: statType,
+    value: numericValue,
+    count: numericCount,
+    sessionLength: numericSessionLength,
+  };
+
+  try {
+    const result = await runSteamFlatHelper(numericAppId, [change], 'stats-set');
+    if (!(result.changed || []).some((item) => item.name === statName) || !result.stored) {
+      throw new Error(result.failed?.[0]?.reason || 'Steam rejected the stat change.');
+    }
+    return result.changed[0];
+  } catch (nativeError) {
+    if (statType !== 'int') throw nativeError;
+    return runSteamWorker({
+      action: 'setStat',
+      appId: numericAppId,
+      name: statName,
+      statType,
+      value: change.value,
+    });
+  }
 });
 
 ipcMain.handle('stats:reset', async (_event, { appId }) => {
-  return runSteamWorker({
-    action: 'resetStats',
-    appId: Number(appId),
-  });
+  const numericAppId = Number(appId);
+  if (!Number.isInteger(numericAppId) || numericAppId <= 0) throw new Error('Invalid AppID.');
+  const stats = [...(statsByAppId.get(numericAppId)?.values() || [])];
+  if (!stats.length) throw new Error('No Steam stats schema is loaded for this app.');
+  if (stats.some((stat) => stat.changeProtected)) {
+    throw new Error('Steam schema contains read-only stats, so reset is disabled.');
+  }
+  const typedStats = stats.map((stat) => ({ ...stat, type: normalizeStatType(stat.type) }));
+  try {
+    const result = await runSteamFlatHelper(numericAppId, typedStats, 'stats-reset');
+    if (!result.reset || !result.stored) throw new Error('Steam rejected the stat reset.');
+    return result;
+  } catch {
+    return runSteamWorker({
+      action: 'resetStats',
+      appId: numericAppId,
+    });
+  }
 });
 
 ipcMain.handle('steamworks:diagnose', async (_event, { appId }) => {

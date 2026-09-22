@@ -29,6 +29,8 @@ const state = {
   settings: { apiKey: '', language: 'ukrainian', theme: 'dark' },
   activeProfileId: '',
   activePersona: '',
+  steamRunning: null,
+  steamPersona: '',
   gameRiskFilter: 'all',
   gameSort: 'name',
   activeTab: 'achievements',
@@ -123,6 +125,12 @@ const elements = {
   unlockSelectedButton: document.querySelector('#unlockSelectedButton'),
   lockSelectedButton: document.querySelector('#lockSelectedButton'),
   clearSelectionButton: document.querySelector('#clearSelectionButton'),
+  appDialog: document.querySelector('#appDialog'),
+  appDialogTitle: document.querySelector('#appDialogTitle'),
+  appDialogMessage: document.querySelector('#appDialogMessage'),
+  appDialogDiff: document.querySelector('#appDialogDiff'),
+  appDialogCancel: document.querySelector('#appDialogCancel'),
+  appDialogConfirm: document.querySelector('#appDialogConfirm'),
 };
 
 const RISKY_APP_IDS = new Set([
@@ -147,13 +155,18 @@ const UI_TRANSLATIONS = {
     allGames: 'Усі ігри',
     safeGames: 'Без позначки ризику',
     riskyGames: 'Тільки ризикові',
+    achievementsFirst: 'З досягненнями спочатку',
+    riskyFirst: 'Ризикові спочатку',
+    issuesFirst: 'Проблемні спочатку',
     libraryDiagnostics: 'Перевірити бібліотеку',
     noGameSelectedMeta: 'Гру не вибрано',
     chooseGame: 'Оберіть гру',
     openSteam: 'Відкрити сторінку гри в Steam',
     refreshGame: 'Оновити поточну гру',
+    gameButtonLabel: 'Гра',
     save: 'Зберегти',
     appearance: 'Налаштування',
+    resizeSidebar: 'Перетягнути для зміни ширини',
     uiLanguage: 'Мова програми й досягнень',
     theme: 'Тема',
     dark: 'Темна',
@@ -163,6 +176,12 @@ const UI_TRANSLATIONS = {
     compactScale: 'Компактний',
     normalScale: 'Звичайний',
     largeScale: 'Більший',
+    apiKeyLabel: 'Steam Web API key',
+    optionalPlaceholder: '(необов’язково)',
+    settingsSaved: 'Налаштування збережено.',
+    settingsSavedForAccount: 'Налаштування збережено для поточного Steam-акаунта.',
+    ukrainianLanguage: 'Українська',
+    englishLanguage: 'English',
     achievements: 'Досягнення',
     extra: 'Додатково',
     history: 'Історія',
@@ -170,9 +189,20 @@ const UI_TRANSLATIONS = {
     everything: 'Усе',
     unlocked: 'Розблоковані',
     locked: 'Заблоковані',
+    stateUnknown: 'Стан невідомий',
+    stateUnknownNotice: 'Steam не підтвердив стан цього досягнення. Оновіть гру й спробуйте знову.',
+    statePartialNotice: 'Steam повернув стан лише частини досягнень. Неперевірені досягнення недоступні для зміни.',
+    progressPartial: '{unlocked} з {known} перевірених розблоковано · {unknown} невідомо',
+    partialState: 'частину станів не підтверджено',
+    mixedState: 'кілька джерел Steam',
     changed: 'Змінені',
     baseGame: 'Основна гра',
     achievementSort: 'Сортування досягнень',
+    achievementFilter: 'Фільтр досягнень',
+    filterTitle: 'Показати: {label}',
+    gameCount: '{shown} / {total} ігор',
+    achievementCountWithChanges: '{shown}/{total} · змін: {changes}',
+    clearSelection: 'Скасувати виділення',
     defaultSort: 'Як у Steam',
     nameSort: 'Назва A-Z',
     lockedFirst: 'Заблоковані спочатку',
@@ -206,16 +236,179 @@ const UI_TRANSLATIONS = {
     readableStats: 'читабельні',
     writableStats: 'змінювані',
     unsupportedStats: 'не підтримуються',
+    stats: 'Статистика',
+    statTypeDetails: 'тип: {type}',
+    statDefaultDetails: 'типове: {value}',
+    statMinDetails: 'мін.: {value}',
+    statMaxDetails: 'макс.: {value}',
+    statIncrementOnly: 'лише збільшення',
+    statProtected: 'тільки читання: обмежено Steam schema',
+    statNotReturned: 'Steam не повернув значення цієї статистики',
+    statNativeRequired: 'цей тип потребує native Steam helper',
+    statUnsupportedType: 'Steam повернув непідтримуваний тип статистики',
+    statAverageRateCount: 'Кількість за сесію',
+    statAverageRateSeconds: 'Тривалість сесії, секунд',
+    statAverageRateHint: 'оновлення середньої швидкості: кількість за сесію / тривалість',
+    statInvalidChange: 'Введіть коректне числове значення. Для average-rate тривалість має бути більшою за нуль.',
+    statRejected: 'Steam відхилив зміну статистики.',
+    resetStatsProtected: 'Скидання недоступне: Steam schema містить статистику тільки для читання.',
+    confirm: 'OK',
+    cancel: 'Скасувати',
+    close: 'Закрити',
+    prepare: 'Підготувати',
+    apply: 'Застосувати',
+    reset: 'Скинути',
+    dialogRefreshGameTitle: 'Оновлення гри',
+    dialogSwitchGameTitle: 'Перехід до іншої гри',
+    dialogBackupComparisonTitle: 'Порівняння з backup',
+    dialogBackupRestoreTitle: 'Відновлення з backup',
+    dialogApplyChangesTitle: 'Підтвердження змін',
+    dialogResetStatsTitle: 'Скидання статистики',
+    steamworksCheckComplete: 'Перевірку Steamworks завершено.',
+    statSaved: 'Статистику збережено: {name}',
+    resetStatsConfirm: 'Скинути статистику Steam для "{game}"?\n\nДосягнення не будуть скинуті.',
+    resetStatsConfirmRisk: 'Ця дія змінить внутрішньоігрову статистику й може вплинути на прогрес гри. Автоматичного відновлення немає.',
+    resetStatsConfirmFinal: 'Останнє підтвердження: скинути статистику для "{game}" зараз?',
+    statsReset: 'Статистику скинуто.',
     refreshHistory: 'Оновити історію',
     openBackups: 'Відкрити папку backup',
+    historyFallbackGame: 'Гра Steam',
+    historySummary: 'розблокувати: {unlocks} · заблокувати: {locks} · застосовано: {changed} · помилок: {failed}',
+    backupLabel: 'Backup',
+    compareBackup: 'Порівняти',
+    restoreBackup: 'Відновити',
+    undoLastChange: 'Скасувати останню зміну',
+    dialogUndoTitle: 'Скасування останньої зміни',
+    backupDifferences: 'Відмінностей з backup: {count}',
+    backupMatches: 'Поточний стан збігається з цим backup.',
+    backupReadOnlySkipped: 'Пропущено змін тільки для читання: {count}.',
+    backupOnlyReadOnly: 'Backup відрізняється лише досягненнями, які не можна змінювати вручну.',
+    backupRestoreConfirm: 'Підготувати відновлення з backup для гри "{game}"?\n\nЗмін буде підготовлено: {count}. {skipped}\n\nЗміни не будуть відправлені в Steam автоматично. Після цього натисніть ✓ для підтвердження.',
+    backupRestoreQueued: 'Відновлення підготовлено: {count} змін. Натисніть ✓, щоб застосувати.',
+    undoConfirm: 'Підготувати скасування останньої зміни для гри "{game}"?\n\nЗмін буде підготовлено: {count}. {skipped}\n\nSteam нічого не отримає автоматично. Перевірте чергу та натисніть ✓ для застосування.',
+    undoQueued: 'Скасування підготовлено: {count} змін. Перевірте diff і натисніть ✓.',
+    readOnlyLabel: 'Тільки читання',
     diagnosticsTitle: 'Діагностика гри',
     diagnosticsEmpty: 'Оберіть гру, щоб побачити діагностику.',
+    diagnosticAchievementList: 'Список досягнень',
+    diagnosticCheckboxState: 'Стан галочок',
+    verifiedStates: 'перевірено',
+    stateSources: 'Джерела стану',
+    dlcSources: 'Джерела DLC',
+    diagnosticAchievementsSummary: '{total} всього · {base} основна гра · {dlc} DLC',
+    diagnosticDlcStore: 'DLC зі Steam Store',
+    diagnosticDlcSummary: '{found} знайдено · {groups} з досягненнями',
+    diagnosticLock: 'Блокування',
+    diagnosticSteamworksHelper: 'Steamworks-помічник',
+    diagnosticNativeHelper: 'Native-помічник',
+    diagnosticIconName: 'Іконки / назва',
+    diagnosticProtectedCount: '{count} заблоковано Steam',
+    diagnosticNoSteamLock: 'немає Steam-блокування',
+    diagnosticErrorValue: 'помилка: {message}',
+    diagnosticInstalled: 'встановлено',
+    diagnosticNotInstalled: 'не встановлено',
+    diagnosticOwned: 'є в акаунті',
+    diagnosticNotOwned: 'немає в акаунті',
+    diagnosticNotChecked: 'ще не перевірено',
+    diagnosticLocalIcon: 'іконка з локального кешу',
+    diagnosticNetworkIcon: 'іконка з мережі',
+    diagnosticSuspiciousName: 'назва підозріла',
+    diagnosticNormalName: 'назва виглядає нормально',
+    diagnosticIconNameSummary: '{icon} · {name}',
+    diagnosticRisky: 'онлайн/VAC або античіт-чутлива гра',
+    diagnosticNoRisk: 'без спеціальної позначки ризику',
+    diagnosticWarnings: 'Попередження',
+    diagnosticErrors: 'Помилки',
+    statusLoadedLocal: 'локальний кеш Steam',
+    statusLoadedWebApi: 'Steam Web API',
+    statusLoadedGlobal: 'глобальна схема Steam',
+    statusCommunity: 'Steam Community',
+    statusLoadedPublic: 'публічний профіль Steam',
+    statusLoadedNative: 'локальний Steam API',
+    statusPartialNative: 'локальний Steam API (частково)',
+    statusLoadedSteamworks: 'Steamworks',
+    statusPartialSteamworks: 'Steamworks (частково)',
+    statusPartialWebApi: 'Steam Web API (частково)',
+    statusSkippedWebApi: 'без Web API',
+    statusUnavailable: 'недоступно',
+    statusMissingProfile: 'профіль не визначено',
+    statusEmpty: 'порожньо',
+    statusMissingLocal: 'немає локальної схеми',
+    statusNoData: 'немає даних',
+    protectedAllNotice: 'Steam забороняє ручну зміну всіх досягнень цієї гри ({count}).',
+    protectedSomeNotice: 'Steam забороняє ручну зміну: {protected} з {total}.',
+    checkingLibrary: 'Перевірка бібліотеки',
+    checkingLibraryDetails: 'Перевіряю локальні схеми, іконки, назви, DLC та Steam-блокування...',
+    librarySummary: 'Перевірено ігор: {total}; з досягненнями: {withAchievements}.',
+    suspiciousNames: 'Підозрілі назви',
+    missingIcons: 'Без іконок',
+    protectedGames: 'Steam блокує зміну',
+    dlcMarkedGames: 'Є DLC-позначки',
+    diagnosticListNone: '{label}: немає',
+    diagnosticListItems: '{label}: {items}{more}',
+    diagnosticListMore: ', ще {count}',
     noStatsSchema: 'Для цієї гри не знайдено schema статистики.',
     statsEmpty: "Статистика з'явиться, якщо Steam поверне schema для гри.",
     historyEmpty: 'Історія змін поки порожня.',
     noGamesFound: 'Ігор не знайдено.',
     noAchievementsAvailable: 'Список досягнень поки недоступний для цієї гри.',
     chooseGameForAchievements: 'Оберіть гру, щоб завантажити досягнення.',
+    loading: 'Завантаження...',
+    refreshingSteam: 'Оновлення Steam',
+    checkingSteamProfile: 'Перевіряю клієнт Steam і поточний профіль...',
+    steamRunning: 'Steam: запущено',
+    steamNotRunning: 'Steam: не запущено',
+    startSteamNotice: 'Запустіть Steam і увійдіть в акаунт перед зміною досягнень.',
+    refreshingGames: 'Оновлення списку ігор',
+    readingGameLibrary: 'Читаю локальну бібліотеку, кеш Steam і, якщо доступно, Web API...',
+    preparingInterface: 'Підготовка інтерфейсу',
+    gameCountLoading: 'Знайдено ігор: {count}. Оновлюю список і фільтри...',
+    noGameAchievements: 'У цієї гри не знайдено досягнень. Можливо, гра їх не підтримує або Steam ще не має їх у локальному кеші.',
+    schemaUnavailableNotice: 'Не вдалося отримати список досягнень. Запустіть гру через Steam і оновіть список. Також можна додати Steam Web API key.',
+    gameLoadFailedNotice: 'Не вдалося завантажити дані гри. Перевірте Steam і оновіть список.',
+    stateMissingProfileNotice: 'Не вдалося визначити Steam-акаунт. Відкрийте Steam і оновіть список.',
+    stateSkippedWebApiNotice: 'Список досягнень завантажено, але їхній стан не підтверджено. Додайте Steam Web API key або відкрийте профіль.',
+    stateUnavailableNotice: 'Не вдалося прочитати стан досягнень. Додайте Steam Web API key або відкрийте профіль.',
+    riskyGameNotice: 'Увага: це онлайн/VAC або античіт-чутлива гра. Змінюйте досягнення лише якщо розумієте ризики.',
+    loadingAchievements: 'Завантаження досягнень',
+    loadingAchievementDetails: '{name}: читаю Steam schema, DLC і стани досягнень...',
+    loadingGameData: 'Завантаження даних гри...',
+    preparingAchievementList: 'Підготовка списку',
+    preparingAchievementDetails: '{name}: застосовую фільтри, назви та іконки...',
+    discardPendingConfirm: 'Скасувати підготовлені зміни й оновити поточну гру?',
+    discardPendingSwitchGame: 'Скасувати підготовлені зміни й перейти до гри "{game}"?',
+    pendingChangesCanceled: 'Підготовлені зміни скасовано.',
+    progressKnown: '{unlocked} / {total} розблоковано',
+    selectedCount: 'Вибрано: {count}',
+    unlockSelected: 'Розблокувати',
+    lockSelected: 'Заблокувати',
+    selectedNotEditable: 'Жодне з вибраних досягнень не можна змінити.',
+    queuedChanges: 'Підготовлено змін: {count}. Натисніть ✓, щоб підтвердити.',
+    noVisibleEditable: 'Немає видимих досягнень, які можна змінити вручну.',
+    visibleUnlockQueued: 'Позначено для розблокування: {count}. Натисніть ✓, щоб підтвердити.',
+    visibleLockQueued: 'Позначено для блокування: {count}. Натисніть ✓, щоб підтвердити.',
+    achievementProtectedNotice: 'Steam заблокував це досягнення для ручної зміни.',
+    achievementProtectedLabel: 'Заблоковано для зміни Steam',
+    sortByAchievement: 'Сортувати: {name}',
+    moreItems: '...і ще {count}',
+    moreItemsInline: 'і ще {count}',
+    failureAfterStatsLoaded: 'Steam завантажив статистику, але відхилив зміну.',
+    failureMissingAchievement: 'Steam не бачить це досягнення у поточній сесії.',
+    failureInit: 'Steam API не вдалося запустити для цієї гри.',
+    failureStatsInterface: 'Steam не повернув модуль статистики для цієї гри.',
+    failureGeneric: 'Steam відхилив зміну.',
+    failureReadOnlyAchievement: 'Steam schema позначає це досягнення як доступне тільки для читання.',
+    blockedChangesRemoved: 'Неперевірені або захищені Steam досягнення прибрано з черги змін.',
+    noChangesToApply: 'У черзі немає фактичних змін.',
+    dryRunChanges: 'Попередній перегляд змін',
+    dryRunUnlocked: 'Розблоковано',
+    dryRunLocked: 'Заблоковано',
+    dryRunUnknown: 'Невідомо',
+    applyConfirm: 'Підтвердити зміни для гри "{game}"?\n\nРозблокувати: {unlocks}\nЗаблокувати: {locks}\n\n{preview}:\n\nПеред змінами буде створено backup. Після підтвердження зміни буде відправлено в Steam.',
+    creatingBackup: 'Створення backup перед змінами...',
+    sendingChanges: 'Відправлення змін у Steam...',
+    applyPartial: 'Застосовано: {changed}. Не вдалося: {failed}. {details}',
+    applySuccess: 'Зміни застосовано: {changed}. Backup збережено.',
   },
   english: {
     appTitle: 'Steam Achievement Manager',
@@ -229,13 +422,18 @@ const UI_TRANSLATIONS = {
     allGames: 'All games',
     safeGames: 'Without risk marker',
     riskyGames: 'Risky only',
+    achievementsFirst: 'Achievements first',
+    riskyFirst: 'Risky first',
+    issuesFirst: 'Issues first',
     libraryDiagnostics: 'Check library',
     noGameSelectedMeta: 'No game selected',
     chooseGame: 'Choose a game from the list',
     openSteam: 'Open game page in Steam',
     refreshGame: 'Refresh current game only',
+    gameButtonLabel: 'Game',
     save: 'Save',
     appearance: 'Settings',
+    resizeSidebar: 'Drag to resize',
     uiLanguage: 'App and achievement language',
     theme: 'Theme',
     dark: 'Dark',
@@ -245,6 +443,12 @@ const UI_TRANSLATIONS = {
     compactScale: 'Compact',
     normalScale: 'Normal',
     largeScale: 'Larger',
+    apiKeyLabel: 'Steam Web API key',
+    optionalPlaceholder: '(optional)',
+    settingsSaved: 'Settings saved.',
+    settingsSavedForAccount: 'Settings saved for the current Steam account.',
+    ukrainianLanguage: 'Українська',
+    englishLanguage: 'English',
     achievements: 'Achievements',
     extra: 'Extra',
     history: 'History',
@@ -252,9 +456,20 @@ const UI_TRANSLATIONS = {
     everything: 'All',
     unlocked: 'Unlocked',
     locked: 'Locked',
+    stateUnknown: 'State unknown',
+    stateUnknownNotice: 'Steam did not confirm this achievement state. Refresh the game and try again.',
+    statePartialNotice: 'Steam returned only some achievement states. Unverified achievements cannot be changed.',
+    progressPartial: '{unlocked} of {known} verified unlocked · {unknown} unknown',
+    partialState: 'some states unverified',
+    mixedState: 'multiple Steam sources',
     changed: 'Changed',
     baseGame: 'Base game',
     achievementSort: 'Achievement sorting',
+    achievementFilter: 'Achievement filter',
+    filterTitle: 'Show: {label}',
+    gameCount: '{shown} / {total} games',
+    achievementCountWithChanges: '{shown}/{total} · changes: {changes}',
+    clearSelection: 'Clear selection',
     defaultSort: 'Steam order',
     nameSort: 'Name A-Z',
     lockedFirst: 'Locked first',
@@ -288,16 +503,179 @@ const UI_TRANSLATIONS = {
     readableStats: 'readable',
     writableStats: 'editable',
     unsupportedStats: 'unsupported',
+    stats: 'Stats',
+    statTypeDetails: 'type: {type}',
+    statDefaultDetails: 'default: {value}',
+    statMinDetails: 'min: {value}',
+    statMaxDetails: 'max: {value}',
+    statIncrementOnly: 'increment only',
+    statProtected: 'read only: restricted by Steam schema',
+    statNotReturned: 'Steam did not return this stat value',
+    statNativeRequired: 'this type requires the native Steam helper',
+    statUnsupportedType: 'Steam returned an unsupported stat type',
+    statAverageRateCount: 'Count this session',
+    statAverageRateSeconds: 'Session length, seconds',
+    statAverageRateHint: 'average-rate update: session count / session duration',
+    statInvalidChange: 'Enter a valid number. For average-rate stats, session length must be greater than zero.',
+    statRejected: 'Steam rejected the stat change.',
+    resetStatsProtected: 'Reset is unavailable because the Steam schema contains read-only stats.',
+    confirm: 'OK',
+    cancel: 'Cancel',
+    close: 'Close',
+    prepare: 'Prepare',
+    apply: 'Apply',
+    reset: 'Reset',
+    dialogRefreshGameTitle: 'Refresh game',
+    dialogSwitchGameTitle: 'Switch game',
+    dialogBackupComparisonTitle: 'Backup comparison',
+    dialogBackupRestoreTitle: 'Restore from backup',
+    dialogApplyChangesTitle: 'Confirm changes',
+    dialogResetStatsTitle: 'Reset stats',
+    steamworksCheckComplete: 'Steamworks check completed.',
+    statSaved: 'Stat saved: {name}',
+    resetStatsConfirm: 'Reset Steam stats for "{game}"?\n\nAchievements will not be reset.',
+    resetStatsConfirmRisk: 'This changes in-game stats and may affect game progress. There is no automatic restore.',
+    resetStatsConfirmFinal: 'Final confirmation: reset stats for "{game}" now?',
+    statsReset: 'Stats reset.',
     refreshHistory: 'Refresh history',
     openBackups: 'Open backup folder',
+    historyFallbackGame: 'Steam game',
+    historySummary: 'unlock: {unlocks} · lock: {locks} · applied: {changed} · errors: {failed}',
+    backupLabel: 'Backup',
+    compareBackup: 'Compare',
+    restoreBackup: 'Restore',
+    undoLastChange: 'Undo last change',
+    dialogUndoTitle: 'Undo last change',
+    backupDifferences: 'Differences from backup: {count}',
+    backupMatches: 'The current state matches this backup.',
+    backupReadOnlySkipped: 'Read-only changes skipped: {count}.',
+    backupOnlyReadOnly: 'The backup differs only in achievements that cannot be changed manually.',
+    backupRestoreConfirm: 'Prepare a restore from backup for "{game}"?\n\nChanges to prepare: {count}. {skipped}\n\nThe changes will not be sent to Steam automatically. Press ✓ afterward to apply them.',
+    backupRestoreQueued: 'Restore prepared: {count} changes. Press ✓ to apply.',
+    undoConfirm: 'Prepare to undo the last change for "{game}"?\n\nChanges to prepare: {count}. {skipped}\n\nNothing will be sent to Steam automatically. Review the queue and press ✓ to apply.',
+    undoQueued: 'Undo prepared: {count} changes. Review the diff and press ✓.',
+    readOnlyLabel: 'Read only',
     diagnosticsTitle: 'Game diagnostics',
     diagnosticsEmpty: 'Choose a game to see diagnostics.',
+    diagnosticAchievementList: 'Achievement list',
+    diagnosticCheckboxState: 'Checkbox state',
+    verifiedStates: 'verified',
+    stateSources: 'State sources',
+    dlcSources: 'DLC sources',
+    diagnosticAchievementsSummary: '{total} total · {base} base game · {dlc} DLC',
+    diagnosticDlcStore: 'DLC from Steam Store',
+    diagnosticDlcSummary: '{found} found · {groups} with achievements',
+    diagnosticLock: 'Lock',
+    diagnosticSteamworksHelper: 'Steamworks helper',
+    diagnosticNativeHelper: 'Native helper',
+    diagnosticIconName: 'Icon / name',
+    diagnosticProtectedCount: '{count} blocked by Steam',
+    diagnosticNoSteamLock: 'no Steam lock',
+    diagnosticErrorValue: 'error: {message}',
+    diagnosticInstalled: 'installed',
+    diagnosticNotInstalled: 'not installed',
+    diagnosticOwned: 'owned',
+    diagnosticNotOwned: 'not owned',
+    diagnosticNotChecked: 'not checked yet',
+    diagnosticLocalIcon: 'local cache icon',
+    diagnosticNetworkIcon: 'network icon',
+    diagnosticSuspiciousName: 'suspicious name',
+    diagnosticNormalName: 'name looks normal',
+    diagnosticIconNameSummary: '{icon} · {name}',
+    diagnosticRisky: 'online/VAC or anti-cheat sensitive game',
+    diagnosticNoRisk: 'no special risk marker',
+    diagnosticWarnings: 'Warnings',
+    diagnosticErrors: 'Errors',
+    statusLoadedLocal: 'local Steam cache',
+    statusLoadedWebApi: 'Steam Web API',
+    statusLoadedGlobal: 'global Steam schema',
+    statusCommunity: 'Steam Community',
+    statusLoadedPublic: 'public Steam profile',
+    statusLoadedNative: 'local Steam API',
+    statusPartialNative: 'local Steam API (partial)',
+    statusLoadedSteamworks: 'Steamworks',
+    statusPartialSteamworks: 'Steamworks (partial)',
+    statusPartialWebApi: 'Steam Web API (partial)',
+    statusSkippedWebApi: 'without Web API',
+    statusUnavailable: 'unavailable',
+    statusMissingProfile: 'profile not detected',
+    statusEmpty: 'empty',
+    statusMissingLocal: 'no local schema',
+    statusNoData: 'no data',
+    protectedAllNotice: 'Steam blocks manual changes to all achievements in this game ({count}).',
+    protectedSomeNotice: 'Steam blocks manual changes to {protected} of {total} achievements.',
+    checkingLibrary: 'Checking library',
+    checkingLibraryDetails: 'Checking local schemas, icons, names, DLC and Steam locks...',
+    librarySummary: 'Games checked: {total}; with achievements: {withAchievements}.',
+    suspiciousNames: 'Suspicious names',
+    missingIcons: 'Missing icons',
+    protectedGames: 'Steam blocks changes',
+    dlcMarkedGames: 'DLC markers found',
+    diagnosticListNone: '{label}: none',
+    diagnosticListItems: '{label}: {items}{more}',
+    diagnosticListMore: ', {count} more',
     noStatsSchema: 'No stats schema was found for this game.',
     statsEmpty: 'Stats appear here if Steam returns a schema for the game.',
     historyEmpty: 'Change history is empty.',
     noGamesFound: 'No games found.',
     noAchievementsAvailable: 'The achievement list is not available for this game yet.',
     chooseGameForAchievements: 'Choose a game to load achievements.',
+    loading: 'Loading...',
+    refreshingSteam: 'Refreshing Steam',
+    checkingSteamProfile: 'Checking the Steam client and current profile...',
+    steamRunning: 'Steam: running',
+    steamNotRunning: 'Steam: not running',
+    startSteamNotice: 'Start Steam and sign in before changing achievements.',
+    refreshingGames: 'Refreshing game list',
+    readingGameLibrary: 'Reading the local library, Steam cache and Web API when available...',
+    preparingInterface: 'Preparing interface',
+    gameCountLoading: '{count} games found. Updating list and filters...',
+    noGameAchievements: 'No achievements were found for this game. It may not support them, or Steam may not have them in its local cache yet.',
+    schemaUnavailableNotice: 'Could not load the achievement list. Launch the game through Steam and refresh. You can also add a Steam Web API key.',
+    gameLoadFailedNotice: 'Could not load game data. Check Steam and refresh the list.',
+    stateMissingProfileNotice: 'Steam account could not be detected. Open Steam and refresh the list.',
+    stateSkippedWebApiNotice: 'The achievement list loaded, but its states could not be confirmed. Add a Steam Web API key or make your profile public.',
+    stateUnavailableNotice: 'Could not read achievement states. Add a Steam Web API key or make your profile public.',
+    riskyGameNotice: 'Warning: this is an online/VAC or anti-cheat-sensitive game. Change achievements only if you understand the risks.',
+    loadingAchievements: 'Loading achievements',
+    loadingAchievementDetails: '{name}: reading Steam schema, DLC and achievement states...',
+    loadingGameData: 'Loading game data...',
+    preparingAchievementList: 'Preparing list',
+    preparingAchievementDetails: '{name}: applying filters, names and icons...',
+    discardPendingConfirm: 'Discard queued changes and refresh this game?',
+    discardPendingSwitchGame: 'Discard queued changes and switch to "{game}"?',
+    pendingChangesCanceled: 'Queued changes canceled.',
+    progressKnown: '{unlocked} / {total} unlocked',
+    selectedCount: '{count} selected',
+    unlockSelected: 'Unlock',
+    lockSelected: 'Lock',
+    selectedNotEditable: 'None of the selected achievements can be changed.',
+    queuedChanges: 'Changes queued: {count}. Press ✓ to apply.',
+    noVisibleEditable: 'No visible achievements can be changed manually.',
+    visibleUnlockQueued: 'Queued for unlock: {count}. Press ✓ to apply.',
+    visibleLockQueued: 'Queued for lock: {count}. Press ✓ to apply.',
+    achievementProtectedNotice: 'Steam blocked this achievement from manual changes.',
+    achievementProtectedLabel: 'Blocked from Steam changes',
+    sortByAchievement: 'Sort by {name}',
+    moreItems: '...and {count} more',
+    moreItemsInline: 'and {count} more',
+    failureAfterStatsLoaded: 'Steam loaded stats but rejected the change.',
+    failureMissingAchievement: 'Steam cannot find this achievement API name in the current session.',
+    failureInit: 'Steam API could not initialize for this game.',
+    failureStatsInterface: 'Steam did not return the stats interface for this game.',
+    failureGeneric: 'Steam rejected the change.',
+    failureReadOnlyAchievement: 'The Steam schema marks this achievement as read only.',
+    blockedChangesRemoved: 'Achievements with unverified states or Steam protection were removed from the change queue.',
+    noChangesToApply: 'There are no actual changes in the queue.',
+    dryRunChanges: 'Change preview',
+    dryRunUnlocked: 'Unlocked',
+    dryRunLocked: 'Locked',
+    dryRunUnknown: 'Unknown',
+    applyConfirm: 'Apply changes to "{game}"?\n\nUnlock: {unlocks}\nLock: {locks}\n\n{preview}:\n\nA backup will be created first. After confirmation, the changes will be sent to Steam.',
+    creatingBackup: 'Creating a backup before changes...',
+    sendingChanges: 'Sending changes to Steam...',
+    applyPartial: 'Applied: {changed}. Failed: {failed}. {details}',
+    applySuccess: 'Changes applied: {changed}. Backup saved.',
   },
 };
 
@@ -309,6 +687,88 @@ function getUiLanguage() {
 function t(key, fallback = '') {
   const language = getUiLanguage();
   return UI_TRANSLATIONS[language][key] || UI_TRANSLATIONS.english[key] || fallback || key;
+}
+
+function tFormat(key, values) {
+  return t(key).replace(/\{(\w+)\}/g, (match, name) => String(values[name] ?? match));
+}
+
+function renderAppDialogDiff(items) {
+  const visible = items.slice(0, 12);
+  const fragment = document.createDocumentFragment();
+
+  for (const item of visible) {
+    const row = document.createElement('div');
+    row.className = 'app-dialog-diff-row';
+    row.setAttribute('role', 'listitem');
+
+    const name = document.createElement('span');
+    name.className = 'app-dialog-diff-name';
+    name.textContent = item.name;
+    name.title = item.name;
+
+    const states = document.createElement('span');
+    states.className = 'app-dialog-diff-states';
+    const before = document.createElement('span');
+    const beforeState = item.before === null || item.before === undefined ? 'unknown' : (item.before ? 'unlocked' : 'locked');
+    before.className = `app-dialog-diff-state ${beforeState}`;
+    before.textContent = t(`dryRun${beforeState[0].toUpperCase()}${beforeState.slice(1)}`);
+    const arrow = document.createElement('span');
+    arrow.className = 'app-dialog-diff-arrow';
+    arrow.textContent = '→';
+    arrow.setAttribute('aria-hidden', 'true');
+    const after = document.createElement('span');
+    after.className = `app-dialog-diff-state ${item.after ? 'unlocked' : 'locked'}`;
+    after.textContent = t(item.after ? 'dryRunUnlocked' : 'dryRunLocked');
+    states.append(before, arrow, after);
+    row.append(name, states);
+    fragment.append(row);
+  }
+
+  if (items.length > visible.length) {
+    const more = document.createElement('div');
+    more.className = 'app-dialog-diff-more';
+    more.textContent = tFormat('moreItems', { count: items.length - visible.length });
+    fragment.append(more);
+  }
+
+  elements.appDialogDiff.replaceChildren(fragment);
+  elements.appDialogDiff.classList.toggle('hidden', !items.length);
+  elements.appDialogDiff.setAttribute('aria-label', t('dryRunChanges'));
+}
+
+function showAppDialog({ title, message, confirmLabel = t('confirm'), cancelLabel = '', tone = 'default', diffItems = [] }) {
+  const previousFocus = document.activeElement;
+  elements.appDialogTitle.textContent = title;
+  elements.appDialogMessage.textContent = message;
+  renderAppDialogDiff(diffItems);
+  elements.appDialogConfirm.textContent = confirmLabel;
+  elements.appDialogCancel.textContent = cancelLabel;
+  elements.appDialogCancel.classList.toggle('hidden', !cancelLabel);
+  elements.appDialog.dataset.tone = tone;
+  elements.appDialog.returnValue = '';
+
+  return new Promise((resolve) => {
+    elements.appDialog.addEventListener('close', () => {
+      if (previousFocus instanceof HTMLElement && document.contains(previousFocus)) previousFocus.focus();
+      resolve(elements.appDialog.returnValue === 'confirm');
+    }, { once: true });
+
+    elements.appDialog.showModal();
+    requestAnimationFrame(() => {
+      (cancelLabel ? elements.appDialogCancel : elements.appDialogConfirm).focus();
+    });
+  });
+}
+
+function renderSteamStatus() {
+  if (state.steamRunning === null) {
+    elements.steamStatus.textContent = t('steamChecking');
+  } else if (state.steamRunning && state.steamPersona) {
+    elements.steamStatus.textContent = `Steam: ${state.steamPersona}`;
+  } else {
+    elements.steamStatus.textContent = t(state.steamRunning ? 'steamRunning' : 'steamNotRunning');
+  }
 }
 
 function setText(selector, value) {
@@ -325,7 +785,9 @@ function applyUiLanguage() {
   document.documentElement.lang = getUiLanguage() === 'ukrainian' ? 'uk' : 'en';
   document.title = t('appTitle');
   setText('.brand h1', t('appTitle'));
+  renderSteamStatus();
   setAttr('#refreshButton', 'title', t('refresh'));
+  setAttr('#refreshButton', 'aria-label', t('refresh'));
   setText('.field span', t('gameSearchLabel'));
   elements.gameSearch.placeholder = t('gameSearchPlaceholder');
   setText('.toggle-field span', t('onlyAchievements'));
@@ -336,20 +798,24 @@ function applyUiLanguage() {
   setText('#gameSortLabel', t('gameSort'));
   elements.gameSort.options[0].textContent = t('nameSort');
   elements.gameSort.options[1].textContent = 'AppID';
-  elements.gameSort.options[2].textContent = getUiLanguage() === 'english' ? 'Achievements first' : 'З досягненнями спочатку';
-  elements.gameSort.options[3].textContent = getUiLanguage() === 'english' ? 'Risky first' : 'Ризикові спочатку';
-  elements.gameSort.options[4].textContent = getUiLanguage() === 'english' ? 'Issues first' : 'Проблемні спочатку';
+  elements.gameSort.options[2].textContent = t('achievementsFirst');
+  elements.gameSort.options[3].textContent = t('riskyFirst');
+  elements.gameSort.options[4].textContent = t('issuesFirst');
   elements.libraryDiagnosticsButton.textContent = t('libraryDiagnostics');
   elements.libraryDiagnosticsButton.title = t('libraryDiagnostics');
   elements.openSteamButton.title = t('openSteam');
   elements.refreshGameButton.title = t('refreshGame');
-  if (elements.refreshGameLabel) elements.refreshGameLabel.textContent = getUiLanguage() === 'english' ? 'Game' : 'Гра';
+  if (elements.refreshGameLabel) elements.refreshGameLabel.textContent = t('gameButtonLabel');
   elements.appearanceSettingsButton.title = t('appearance');
   elements.appearanceSettingsButton.setAttribute('aria-label', t('appearance'));
-  setText('#apiKeyLabel', 'Steam Web API key');
+  setAttr('.sidebar-resizer', 'title', t('resizeSidebar'));
+  setText('#apiKeyLabel', t('apiKeyLabel'));
+  elements.apiKeyInput.placeholder = t('optionalPlaceholder');
   elements.saveSettingsButton.textContent = t('save');
   setText('#uiLanguageLabel', t('uiLanguage'));
   elements.languageInput.title = t('uiLanguage');
+  elements.languageInput.options[0].textContent = t('ukrainianLanguage');
+  elements.languageInput.options[1].textContent = t('englishLanguage');
   setText('#themeLabel', t('theme'));
   elements.themeInput.options[0].textContent = t('dark');
   elements.themeInput.options[1].textContent = t('light');
@@ -371,10 +837,14 @@ function applyUiLanguage() {
   elements.applyAchievementChangesButton.setAttribute('aria-label', t('applyChanges'));
   elements.cancelPendingChangesButton.title = t('cancelChanges');
   elements.cancelPendingChangesButton.setAttribute('aria-label', t('cancelChanges'));
+  elements.achievementSearch.placeholder = t('achievementFilter');
+  elements.achievementSearch.setAttribute('aria-label', t('achievementFilter'));
+  elements.clearSelectionButton.setAttribute('aria-label', t('clearSelection'));
   elements.loadStatsButton.textContent = t('loadStats');
   elements.resetStatsButton.textContent = t('resetStats');
   elements.steamworksDiagnosticsButton.textContent = t('checkSteamworks');
   elements.statsSearch.placeholder = t('statsFilter');
+  elements.statsSearch.setAttribute('aria-label', t('statsFilter'));
   elements.statsTypeFilter.options[0].textContent = t('allStats');
   elements.statsTypeFilter.options[1].textContent = t('editableStats');
   elements.statsTypeFilter.options[2].textContent = t('readonlyStats');
@@ -421,7 +891,7 @@ function showToast(message, tone = 'info', durationMs = 4000) {
 }
 
 function setLoading(message = '', detail = '') {
-  elements.loadingText.textContent = message || 'Завантаження...';
+  elements.loadingText.textContent = message || t('loading');
   elements.loadingDetail.textContent = detail;
   elements.loadingIndicator.classList.toggle('hidden', !message);
 }
@@ -461,14 +931,14 @@ function getSchemaNotice(schemaStatus, hasAchievements) {
   }
 
   if (status.startsWith('loaded')) {
-    return 'У цієї гри не знайдено досягнень. Можливо, гра не підтримує Steam-досягнення або Steam ще не має їх у локальному кеші.';
+    return t('noGameAchievements');
   }
 
   if (status === 'empty' || status === 'missing-local' || status.startsWith('unavailable')) {
-    return 'Не вдалося отримати список досягнень для цієї гри. Спробуйте запустити гру один раз через Steam, а потім натисніть оновлення. Якщо список усе ще порожній, можна додати Steam Web API key у полі зверху.';
+    return t('schemaUnavailableNotice');
   }
 
-  return 'Не вдалося завантажити дані цієї гри. Перевірте, чи Steam запущений, і спробуйте оновити список.';
+  return t('gameLoadFailedNotice');
 }
 
 function setBusy(target, busy) {
@@ -484,12 +954,14 @@ function getAchievementDraftState(achievement) {
 }
 
 function setPendingAchievement(achievement, achieved) {
+  if (isAchievementChangeProtected(achievement)) return false;
   const key = getAchievementKey(achievement);
   if (achievement.achieved === achieved) {
     state.pendingAchievements.delete(key);
   } else {
     state.pendingAchievements.set(key, achieved);
   }
+  return true;
 }
 
 function getAchievementKey(achievement) {
@@ -534,7 +1006,7 @@ function getDlcGroupCount(achievements) {
 }
 
 function isAchievementChangeProtected(achievement) {
-  return Boolean(achievement.changeProtected);
+  return Boolean(achievement.changeProtected || achievement.stateKnown === false);
 }
 
 function getSteamCdnAlternates(url) {
@@ -689,9 +1161,7 @@ function updateChipLabel(button, label, count) {
   `;
   button.type = 'button';
   button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  button.title = getUiLanguage() === 'english'
-    ? `Show ${label.toLowerCase()} achievements`
-    : `Показати: ${label.toLowerCase()}`;
+  button.title = tFormat('filterTitle', { label });
 }
 
 function applyAchievementStatusFilter(filter) {
@@ -722,7 +1192,7 @@ function updateAchievementFilterLabels() {
     const isDlc = isDlcAchievement(achievement);
 
     acc.all += 1;
-    acc[draftAchieved ? 'unlocked' : 'locked'] += 1;
+    if (achievement.stateKnown !== false) acc[draftAchieved ? 'unlocked' : 'locked'] += 1;
     if (isChanged) acc.changed += 1;
     acc[isDlc ? 'dlc' : 'base'] += 1;
     return acc;
@@ -855,8 +1325,8 @@ function getFilteredAchievements() {
       presentation.description.toLowerCase().includes(query);
 
     if (!matchesQuery) return false;
-    if (state.achievementFilter === 'unlocked') return draftAchieved;
-    if (state.achievementFilter === 'locked') return !draftAchieved;
+    if (state.achievementFilter === 'unlocked') return achievement.stateKnown !== false && draftAchieved;
+    if (state.achievementFilter === 'locked') return achievement.stateKnown !== false && !draftAchieved;
     if (state.achievementFilter === 'changed') return state.pendingAchievements.has(getAchievementKey(achievement));
     if (state.dlcFilter === 'base') return !isDlcAchievement(achievement);
     if (state.dlcFilter === 'dlc') return isDlcAchievement(achievement);
@@ -893,13 +1363,19 @@ function renderProgress() {
     return;
   }
 
-  const unlocked = state.achievements.filter((achievement) => getAchievementDraftState(achievement)).length;
+  const unlocked = state.achievements.filter((achievement) => achievement.stateKnown !== false && getAchievementDraftState(achievement)).length;
   const total = state.achievements.length;
+  const unknown = state.achievements.filter((achievement) => achievement.stateKnown === false).length;
+  if (unknown) {
+    elements.progressText.textContent = tFormat('progressPartial', { unlocked, known: total - unknown, unknown });
+    elements.progressPercent.textContent = '—';
+    elements.progressBar.style.width = '0%';
+    elements.progressSummary.classList.remove('hidden');
+    return;
+  }
   const percent = total ? Math.round((unlocked / total) * 100) : 0;
 
-  elements.progressText.textContent = getUiLanguage() === 'english'
-    ? `${unlocked} / ${total} unlocked`
-    : `${unlocked} / ${total} розблоковано`;
+  elements.progressText.textContent = tFormat('progressKnown', { unlocked, total });
   elements.progressPercent.textContent = `${percent}%`;
   elements.progressBar.style.width = `${percent}%`;
   elements.progressSummary.classList.remove('hidden');
@@ -971,9 +1447,10 @@ function renderGames() {
     return byName(a, b);
   });
 
-  elements.gameCount.textContent = getUiLanguage() === 'english'
-    ? `${games.length} / ${state.games.length} games`
-    : `${games.length} / ${state.games.length} ігор`;
+  elements.gameCount.textContent = tFormat('gameCount', {
+    shown: games.length,
+    total: state.games.length,
+  });
   elements.gameList.innerHTML = '';
   if (!games.length) {
     elements.gameList.className = 'game-list empty-state';
@@ -1006,7 +1483,11 @@ function renderAchievements() {
   const pendingCount = state.pendingAchievements.size;
   const editableCount = state.achievements.filter((achievement) => !isAchievementChangeProtected(achievement)).length;
   elements.achievementCount.textContent = pendingCount
-    ? `${achievements.length}/${state.achievements.length} · ${pendingCount} ${getUiLanguage() === 'english' ? 'changes' : 'змін'}`
+    ? tFormat('achievementCountWithChanges', {
+      shown: achievements.length,
+      total: state.achievements.length,
+      changes: pendingCount,
+    })
     : `${achievements.length}/${state.achievements.length}`;
   elements.unlockAllButton.disabled = !state.selectedGame || !editableCount;
   elements.lockAllButton.disabled = !state.selectedGame || !editableCount;
@@ -1042,9 +1523,7 @@ function renderAchievements() {
       const sortState = getTableSortState(sort);
       button.classList.toggle('active', sortState.active);
       button.dataset.sortDirection = sortState.direction;
-      button.title = getUiLanguage() === 'english'
-        ? `Sort by ${button.textContent.trim()}`
-        : `Сортувати: ${button.textContent.trim()}`;
+      button.title = tFormat('sortByAchievement', { name: button.textContent.trim() });
       button.addEventListener('click', () => {
         setAchievementSort(sortState.next);
       });
@@ -1092,7 +1571,9 @@ function renderAchievements() {
     checkbox.checked = draftAchieved;
     checkbox.disabled = isProtected;
     checkbox.title = isProtected
-      ? (getUiLanguage() === 'english' ? 'Steam blocked this achievement from manual changes.' : 'Steam заблокував це досягнення для ручної зміни.')
+      ? (achievement.stateKnown === false
+        ? t('stateUnknownNotice')
+        : t('achievementProtectedNotice'))
       : '';
     checkbox.addEventListener('change', () => queueAchievementChange(achievement, checkbox.checked));
 
@@ -1105,11 +1586,13 @@ function renderAchievements() {
       ${dlcLabel ? `<em>${escapeHtml(dlcLabel)}</em>` : ''}
       ${presentation.hiddenLike ? `<em>${escapeHtml(t('hidden'))}</em>` : ''}
       ${presentation.missingMetadata ? `<em>${escapeHtml(t('metadataUnavailable'))}: ${escapeHtml(achievement.id)}</em>` : ''}
-      ${isProtected ? `<em>${escapeHtml(getUiLanguage() === 'english' ? 'Blocked from Steam changes' : 'Заблоковано для зміни Steam')}</em>` : ''}
+      ${achievement.stateKnown === false
+        ? `<em>${escapeHtml(t('stateUnknown'))}</em>`
+        : (isProtected ? `<em>${escapeHtml(t('achievementProtectedLabel'))}</em>` : '')}
     `;
     const status = document.createElement('span');
     status.className = 'achievement-table-cell achievement-status-cell';
-    status.textContent = draftAchieved ? t('unlocked') : t('locked');
+    status.textContent = achievement.stateKnown === false ? t('stateUnknown') : (draftAchieved ? t('unlocked') : t('locked'));
 
     const source = document.createElement('span');
     source.className = 'achievement-table-cell';
@@ -1124,15 +1607,36 @@ function renderAchievements() {
   }
 }
 
+function isStatEditable(stat, type = stat?.type) {
+  return stat?.readable !== false &&
+    stat?.writable !== false &&
+    !stat?.changeProtected &&
+    ['int', 'float', 'avgrate'].includes(type);
+}
+
+function isStatUnsupported(stat) {
+  return stat?.readable === false || !['int', 'float', 'avgrate'].includes(stat?.type);
+}
+
+function getStatErrorText(stat) {
+  if (stat?.changeProtected) return t('statProtected');
+  if (stat?.errorCode === 'not-returned') return t('statNotReturned');
+  if (stat?.errorCode === 'native-helper-required') return t('statNativeRequired');
+  if (stat?.errorCode === 'unsupported-type') return t('statUnsupportedType');
+  return stat?.error || '';
+}
+
 function renderStats() {
   renderGameDiagnostics();
+  const allStats = state.stats.length ? state.stats : state.statsSchema;
+  const hasProtectedStats = allStats.some((stat) => stat.changeProtected);
   elements.statsCount.textContent = String(state.stats.length || state.statsSchema.length || 0);
-  elements.resetStatsButton.disabled = !state.selectedGame || !(state.stats.length || state.statsSchema.length);
+  elements.resetStatsButton.disabled = !state.selectedGame || !allStats.length || hasProtectedStats;
+  elements.resetStatsButton.title = hasProtectedStats ? t('resetStatsProtected') : '';
   elements.loadStatsButton.disabled = !state.selectedGame;
   elements.steamworksDiagnosticsButton.disabled = !state.selectedGame;
   elements.statsList.innerHTML = '';
 
-  const allStats = state.stats.length ? state.stats : state.statsSchema;
   const query = state.statsFilter.trim().toLowerCase();
   const typeFilter = state.statsTypeFilter || 'all';
   const stats = allStats.filter((stat) => {
@@ -1141,8 +1645,8 @@ function renderStats() {
       String(stat.displayName || '').toLowerCase().includes(query);
     if (!matchesQuery) return false;
 
-    const editable = stat.readable !== false && stat.writable !== false && stat.type !== 'float';
-    const unsupported = stat.readable === false || stat.type === 'float';
+    const editable = isStatEditable(stat);
+    const unsupported = isStatUnsupported(stat);
     if (typeFilter === 'editable') return editable;
     if (typeFilter === 'readonly') return stat.readable !== false && !editable;
     if (typeFilter === 'unsupported') return unsupported;
@@ -1157,8 +1661,8 @@ function renderStats() {
 
   elements.statsList.className = 'stats-list';
   const readable = allStats.filter((stat) => stat.readable !== false).length;
-  const writable = allStats.filter((stat) => stat.writable !== false && stat.type !== 'float').length;
-  const unsupported = allStats.filter((stat) => stat.readable === false || stat.type === 'float').length;
+  const writable = allStats.filter((stat) => isStatEditable(stat)).length;
+  const unsupported = allStats.filter(isStatUnsupported).length;
   const summary = document.createElement('div');
   summary.className = 'stats-summary-row';
   summary.innerHTML = `
@@ -1169,88 +1673,106 @@ function renderStats() {
 
   for (const stat of stats) {
     const row = document.createElement('div');
-    row.className = `stat-row ${stat.readable === false ? 'muted' : ''}`;
+    const editable = isStatEditable(stat);
+    row.className = `stat-row ${editable ? '' : 'readonly'}`;
 
     const name = document.createElement('div');
     name.className = 'stat-name';
     const details = [
       stat.name,
-      `type: ${stat.type || 'int'}`,
-      stat.defaultValue !== undefined ? `default: ${stat.defaultValue}` : '',
-      stat.minValue !== null && stat.minValue !== undefined ? `min: ${stat.minValue}` : '',
-      stat.maxValue !== null && stat.maxValue !== undefined ? `max: ${stat.maxValue}` : '',
-      stat.incrementOnly ? 'increment only' : '',
-      stat.error || '',
+      tFormat('statTypeDetails', { type: stat.type || 'int' }),
+      stat.defaultValue !== undefined ? tFormat('statDefaultDetails', { value: stat.defaultValue }) : '',
+      stat.minValue !== null && stat.minValue !== undefined ? tFormat('statMinDetails', { value: stat.minValue }) : '',
+      stat.maxValue !== null && stat.maxValue !== undefined ? tFormat('statMaxDetails', { value: stat.maxValue }) : '',
+      stat.incrementOnly ? t('statIncrementOnly') : '',
+      stat.type === 'avgrate' ? t('statAverageRateHint') : '',
+      getStatErrorText(stat),
     ].filter(Boolean).join(' · ');
     name.innerHTML = `<strong>${escapeHtml(stat.displayName || stat.name)}</strong><span>${escapeHtml(details)}</span>`;
 
     const type = document.createElement('select');
-    type.innerHTML = '<option value="int">int</option><option value="float">float</option>';
-    type.value = stat.type === 'float' ? 'float' : 'int';
+    type.innerHTML = '<option value="int">int</option><option value="float">float</option><option value="avgrate">avgrate</option><option value="unknown">unknown</option>';
+    type.value = ['int', 'float', 'avgrate'].includes(stat.type) ? stat.type : 'unknown';
+    type.disabled = true;
 
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = type.value === 'float' ? '0.01' : '1';
-    input.value = stat.value ?? stat.defaultValue ?? 0;
-    input.disabled = stat.readable === false || type.value === 'float';
-
-    type.addEventListener('change', () => {
-      input.step = type.value === 'float' ? '0.01' : '1';
-      input.disabled = type.value === 'float';
-      save.disabled = type.value === 'float' || stat.readable === false || stat.writable === false;
-    });
+    const controls = document.createElement('div');
+    controls.className = stat.type === 'avgrate' ? 'stat-average-inputs' : 'stat-value-input';
 
     const save = document.createElement('button');
-    save.textContent = 'OK';
-    save.disabled = stat.readable === false || stat.writable === false || type.value === 'float';
-    save.addEventListener('click', () => saveStat(stat.name, type.value, input.value, save));
+    save.textContent = t('confirm');
+    save.disabled = !editable;
 
-    row.append(name, type, input, save);
+    if (stat.type === 'avgrate') {
+      const countInput = document.createElement('input');
+      countInput.type = 'number';
+      countInput.step = 'any';
+      countInput.placeholder = t('statAverageRateCount');
+      countInput.setAttribute('aria-label', t('statAverageRateCount'));
+      countInput.disabled = !editable;
+
+      const secondsInput = document.createElement('input');
+      secondsInput.type = 'number';
+      secondsInput.step = '0.01';
+      secondsInput.min = '0.01';
+      secondsInput.placeholder = t('statAverageRateSeconds');
+      secondsInput.setAttribute('aria-label', t('statAverageRateSeconds'));
+      secondsInput.disabled = !editable;
+
+      controls.append(countInput, secondsInput);
+      save.addEventListener('click', () => saveStat(stat.name, null, save, {
+        count: countInput.value,
+        sessionLength: secondsInput.value,
+      }));
+    } else {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.step = stat.type === 'float' ? 'any' : '1';
+      input.value = stat.value ?? stat.defaultValue ?? 0;
+      input.disabled = !editable;
+      controls.append(input);
+      save.addEventListener('click', () => saveStat(stat.name, input.value, save));
+    }
+
+    const reason = getStatErrorText(stat);
+    if (reason) {
+      type.title = reason;
+      controls.title = reason;
+      save.title = reason;
+    }
+
+    row.append(name, type, controls, save);
     elements.statsList.append(row);
   }
 }
 
 function formatStatus(value) {
   const status = String(value || '');
-  const labelsByLanguage = {
-    ukrainian: {
-      'loaded-local': 'локальний кеш Steam',
-      loaded: 'Steam Web API',
-      'loaded-global': 'глобальна схема Steam',
-      community: 'Steam Community',
-      'loaded-web-api': 'Steam Web API',
-      'loaded-public': 'публічний профіль Steam',
-      'loaded-native': 'локальний Steam API',
-      'loaded-steamworks-fallback': 'Steamworks',
-      'skipped-web-api': 'без Web API',
-      unavailable: 'недоступно',
-      'missing-profile': 'профіль не визначено',
-      empty: 'порожньо',
-      'missing-local': 'немає локальної схеми',
-    },
-    english: {
-      'loaded-local': 'local Steam cache',
-      loaded: 'Steam Web API',
-      'loaded-global': 'global Steam schema',
-      community: 'Steam Community',
-      'loaded-web-api': 'Steam Web API',
-      'loaded-public': 'public Steam profile',
-      'loaded-native': 'local Steam API',
-      'loaded-steamworks-fallback': 'Steamworks',
-      'skipped-web-api': 'without Web API',
-      unavailable: 'unavailable',
-      'missing-profile': 'profile not detected',
-      empty: 'empty',
-      'missing-local': 'no local schema',
-    },
+  const keys = {
+    'loaded-local': 'statusLoadedLocal',
+    loaded: 'statusLoadedWebApi',
+    'loaded-global': 'statusLoadedGlobal',
+    community: 'statusCommunity',
+    'loaded-web-api': 'statusLoadedWebApi',
+    'loaded-public': 'statusLoadedPublic',
+    'loaded-native': 'statusLoadedNative',
+    'partial-native': 'statusPartialNative',
+    'loaded-steamworks-fallback': 'statusLoadedSteamworks',
+    'partial-steamworks': 'statusPartialSteamworks',
+    'partial-web-api': 'statusPartialWebApi',
+    'loaded-mixed': 'mixedState',
+    partial: 'partialState',
+    'skipped-web-api': 'statusSkippedWebApi',
+    unavailable: 'statusUnavailable',
+    'missing-profile': 'statusMissingProfile',
+    empty: 'statusEmpty',
+    'missing-local': 'statusMissingLocal',
   };
-  const labels = labelsByLanguage[getUiLanguage()] || labelsByLanguage.english;
 
   return status
     .split('+')
     .filter(Boolean)
-    .map((part) => labels[part] || part)
-    .join(' + ') || (getUiLanguage() === 'english' ? 'no data' : 'немає даних');
+    .map((part) => keys[part] ? t(keys[part]) : part)
+    .join(' + ') || t('statusNoData');
 }
 
 function getProtectedNotice() {
@@ -1258,9 +1780,12 @@ function getProtectedNotice() {
   const protectedCount = state.achievements.filter(isAchievementChangeProtected).length;
   if (!protectedCount) return '';
   if (protectedCount === state.achievements.length) {
-    return `Steam забороняє ручну зміну всіх ${protectedCount} досягнень цієї гри.`;
+    return tFormat('protectedAllNotice', { count: protectedCount });
   }
-  return `Steam забороняє ручну зміну ${protectedCount} з ${state.achievements.length} досягнень цієї гри.`;
+  return tFormat('protectedSomeNotice', {
+    protected: protectedCount,
+    total: state.achievements.length,
+  });
 }
 
 function renderGameDiagnostics() {
@@ -1279,23 +1804,42 @@ function renderGameDiagnostics() {
     suspiciousName: isSuspiciousGameName(state.selectedGame.name, state.selectedGame.appId),
     risky: isRiskyGame(state.selectedGame),
   };
-  const lang = getUiLanguage();
-  const isEnglish = lang === 'english';
   const protectedText = diagnostics.protectedAchievements
-    ? (isEnglish ? `${diagnostics.protectedAchievements} blocked by Steam` : `${diagnostics.protectedAchievements} заблоковано Steam`)
-    : (isEnglish ? 'no Steam lock' : 'немає Steam-блокування');
+    ? tFormat('diagnosticProtectedCount', { count: diagnostics.protectedAchievements })
+    : t('diagnosticNoSteamLock');
   const steamworks = state.steamworksDiagnostics;
   const steamworksText = steamworks
     ? (steamworks.error
-      ? (isEnglish ? `error: ${steamworks.error}` : `помилка: ${steamworks.error}`)
-      : `AppID ${steamworks.activeAppId || diagnostics.appId} · ${steamworks.installed ? (isEnglish ? 'installed' : 'встановлено') : (isEnglish ? 'not installed' : 'не встановлено')} · ${steamworks.currentLanguage || '-'}`)
-    : (isEnglish ? 'not checked yet' : 'ще не перевірено');
+      ? tFormat('diagnosticErrorValue', { message: steamworks.error })
+      : `AppID ${steamworks.activeAppId || diagnostics.appId} · ${t(steamworks.installed ? 'diagnosticInstalled' : 'diagnosticNotInstalled')} · ${steamworks.currentLanguage || '-'}`)
+    : t('diagnosticNotChecked');
   const native = steamworks?.nativeHelper;
   const nativeText = native
     ? (native.error
-      ? (isEnglish ? `error: ${native.error}` : `помилка: ${native.error}`)
-      : `${native.installed ? (isEnglish ? 'installed' : 'встановлено') : (isEnglish ? 'not installed' : 'не встановлено')} · ${native.subscribed ? (isEnglish ? 'owned' : 'є в акаунті') : (isEnglish ? 'not owned' : 'немає в акаунті')} · ${native.currentLanguage || '-'}`)
-    : (isEnglish ? 'not checked yet' : 'ще не перевірено');
+      ? tFormat('diagnosticErrorValue', { message: native.error })
+      : `${t(native.installed ? 'diagnosticInstalled' : 'diagnosticNotInstalled')} · ${t(native.subscribed ? 'diagnosticOwned' : 'diagnosticNotOwned')} · ${native.currentLanguage || '-'}`)
+    : t('diagnosticNotChecked');
+  const stateSources = diagnostics.dataSource?.achievementStates || [];
+  const stateSourceText = stateSources.length ? stateSources.map(formatStatus).join(' + ') : formatStatus('');
+  const dlcSources = Array.isArray(diagnostics.dataSource?.dlc) ? diagnostics.dataSource.dlc : [];
+  const dlcSourceText = dlcSources.map((entry) =>
+    `AppID ${entry.appId}: ${formatStatus(entry.schema)} · ${(entry.achievementStates || []).map(formatStatus).join(' + ') || formatStatus('')}`
+  ).join(' · ');
+  const warnings = Array.isArray(diagnostics.warnings) ? diagnostics.warnings : [];
+  const errors = Array.isArray(diagnostics.errors) ? diagnostics.errors : [];
+  const achievementSummary = tFormat('diagnosticAchievementsSummary', {
+    total: diagnostics.achievements || 0,
+    base: diagnostics.baseAchievements || 0,
+    dlc: diagnostics.dlcAchievements || 0,
+  });
+  const dlcSummary = tFormat('diagnosticDlcSummary', {
+    found: diagnostics.dlcCandidates || 0,
+    groups: diagnostics.dlcGroups || 0,
+  });
+  const iconNameSummary = tFormat('diagnosticIconNameSummary', {
+    icon: t(diagnostics.iconCached ? 'diagnosticLocalIcon' : 'diagnosticNetworkIcon'),
+    name: t(diagnostics.suspiciousName ? 'diagnosticSuspiciousName' : 'diagnosticNormalName'),
+  });
 
   elements.gameDiagnostics.className = 'diagnostics-card';
   elements.gameDiagnostics.innerHTML = `
@@ -1304,16 +1848,20 @@ function renderGameDiagnostics() {
       <span>${escapeHtml(diagnostics.name)} · AppID ${escapeHtml(diagnostics.appId)}</span>
     </div>
     <div class="diagnostics-grid">
-      <div><span>${isEnglish ? 'Achievement list' : 'Список досягнень'}</span><strong>${escapeHtml(formatStatus(diagnostics.schemaStatus))}</strong></div>
-      <div><span>${isEnglish ? 'Checkbox state' : 'Стан галочок'}</span><strong>${escapeHtml(formatStatus(diagnostics.stateStatus))}</strong></div>
-      <div><span>${escapeHtml(t('achievements'))}</span><strong>${diagnostics.achievements || 0} ${isEnglish ? 'total' : 'всього'} · ${diagnostics.baseAchievements || 0} ${escapeHtml(t('baseGame').toLowerCase())} · ${diagnostics.dlcAchievements || 0} DLC</strong></div>
-      <div><span>DLC ${isEnglish ? 'from Steam Store' : 'зі Steam Store'}</span><strong>${diagnostics.dlcCandidates || 0} ${isEnglish ? 'found' : 'знайдено'} · ${diagnostics.dlcGroups || 0} ${isEnglish ? 'with achievements' : 'з досягненнями'}</strong></div>
-      <div><span>${isEnglish ? 'Lock' : 'Блокування'}</span><strong>${escapeHtml(protectedText)}</strong></div>
-      <div><span>${isEnglish ? 'Steamworks helper' : 'Steamworks-помічник'}</span><strong>${escapeHtml(steamworksText)}</strong></div>
-      <div><span>${isEnglish ? 'Native helper' : 'Native-помічник'}</span><strong>${escapeHtml(nativeText)}</strong></div>
-      <div><span>${isEnglish ? 'Icon / name' : 'Іконки / назва'}</span><strong>${diagnostics.iconCached ? (isEnglish ? 'local cache icon' : 'іконка з локального кешу') : (isEnglish ? 'network icon' : 'іконка з мережі')} · ${diagnostics.suspiciousName ? (isEnglish ? 'suspicious name' : 'назва підозріла') : (isEnglish ? 'name looks normal' : 'назва виглядає нормально')}</strong></div>
-      <div><span>${escapeHtml(t('risk'))}</span><strong>${diagnostics.risky ? (isEnglish ? 'online/VAC or anti-cheat sensitive game' : 'онлайн/VAC або античіт-чутлива гра') : (isEnglish ? 'no special risk marker' : 'без спеціальної позначки ризику')}</strong></div>
-      <div><span>${isEnglish ? 'Stats' : 'Статистика'}</span><strong>${diagnostics.stats || 0}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticAchievementList'))}</span><strong>${escapeHtml(formatStatus(diagnostics.schemaStatus))}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticCheckboxState'))}</span><strong>${escapeHtml(formatStatus(diagnostics.stateStatus))} · ${diagnostics.verifiedAchievements || 0}/${diagnostics.achievements || 0} ${escapeHtml(t('verifiedStates'))}</strong></div>
+      <div><span>${escapeHtml(t('stateSources'))}</span><strong>${escapeHtml(stateSourceText)}</strong></div>
+      ${dlcSources.length ? `<div><span>${escapeHtml(t('dlcSources'))}</span><strong>${escapeHtml(dlcSourceText)}</strong></div>` : ''}
+      <div><span>${escapeHtml(t('achievements'))}</span><strong>${escapeHtml(achievementSummary)}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticDlcStore'))}</span><strong>${escapeHtml(dlcSummary)}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticLock'))}</span><strong>${escapeHtml(protectedText)}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticSteamworksHelper'))}</span><strong>${escapeHtml(steamworksText)}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticNativeHelper'))}</span><strong>${escapeHtml(nativeText)}</strong></div>
+      <div><span>${escapeHtml(t('diagnosticIconName'))}</span><strong>${escapeHtml(iconNameSummary)}</strong></div>
+      <div><span>${escapeHtml(t('risk'))}</span><strong>${escapeHtml(t(diagnostics.risky ? 'diagnosticRisky' : 'diagnosticNoRisk'))}</strong></div>
+      <div><span>${escapeHtml(t('stats'))}</span><strong>${diagnostics.stats || 0}</strong></div>
+      ${warnings.length ? `<div><span>${escapeHtml(t('diagnosticWarnings'))}</span><strong>${escapeHtml(warnings.join(' · '))}</strong></div>` : ''}
+      ${errors.length ? `<div><span>${escapeHtml(t('diagnosticErrors'))}</span><strong>${escapeHtml(errors.join(' · '))}</strong></div>` : ''}
     </div>
   `;
 }
@@ -1329,25 +1877,36 @@ function renderHistory() {
   }
 
   elements.historyList.className = 'history-list';
-  for (const entry of state.history) {
+  const undoableIndexes = new Set(window.HistoryUndo.getLatestUndoableHistoryIndexes(state.history));
+  for (const [index, entry] of state.history.entries()) {
     const changes = Array.isArray(entry.changes) ? entry.changes : [];
     const changed = Array.isArray(entry.changed) ? entry.changed : [];
     const failed = Array.isArray(entry.failed) ? entry.failed : [];
     const unlocks = changes.filter((change) => change.achieved).length;
     const locks = changes.length - unlocks;
-    const when = entry.createdAt ? new Date(entry.createdAt).toLocaleString('uk-UA') : '';
+    const when = entry.createdAt
+      ? new Date(entry.createdAt).toLocaleString(getUiLanguage() === 'english' ? 'en-US' : 'uk-UA')
+      : '';
+    const summary = tFormat('historySummary', {
+      unlocks,
+      locks,
+      changed: changed.length,
+      failed: failed.length,
+    });
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `
-      <strong>${escapeHtml(entry.game?.name || 'Steam game')} (${escapeHtml(entry.game?.appId || '')})</strong>
-      <span>${escapeHtml(when)} · розблокувати: ${unlocks} · заблокувати: ${locks} · застосовано: ${changed.length} · помилок: ${failed.length}</span>
-      ${entry.backupPath ? `<small>Backup: ${escapeHtml(entry.backupPath)}</small>` : ''}
-      ${entry.backupPath ? '<div class="history-actions"><button type="button" data-action="compare">Порівняти</button><button type="button" data-action="restore">Відновити</button></div>' : ''}
+      <strong>${escapeHtml(entry.game?.name || t('historyFallbackGame'))} (${escapeHtml(entry.game?.appId || '')})</strong>
+      <span>${escapeHtml(when)} · ${escapeHtml(summary)}</span>
+      ${entry.backupPath ? `<small>${escapeHtml(t('backupLabel'))}: ${escapeHtml(entry.backupPath)}</small>` : ''}
+      ${entry.backupPath ? `<div class="history-actions"><button type="button" data-action="compare">${escapeHtml(t('compareBackup'))}</button><button type="button" data-action="restore">${escapeHtml(t('restoreBackup'))}</button>${undoableIndexes.has(index) ? `<button type="button" data-action="undo">${escapeHtml(t('undoLastChange'))}</button>` : ''}</div>` : ''}
     `;
     const compareButton = row.querySelector('[data-action="compare"]');
     const restoreButton = row.querySelector('[data-action="restore"]');
+    const undoButton = row.querySelector('[data-action="undo"]');
     if (compareButton) compareButton.addEventListener('click', () => compareBackup(entry.backupPath));
     if (restoreButton) restoreButton.addEventListener('click', () => restoreBackup(entry.backupPath));
+    if (undoButton) undoButton.addEventListener('click', () => undoHistoryEntry(entry));
     elements.historyList.append(row);
   }
 }
@@ -1366,13 +1925,15 @@ function renderSelection() {
 
 async function loadStatusAndGames() {
   setBusy(elements.refreshButton, true);
-  setLoading('Оновлення Steam', 'Перевіряю клієнт Steam і поточний профіль...');
+  setLoading(t('refreshingSteam'), t('checkingSteamProfile'));
   showNotice('');
   try {
     const status = await window.sam.getStatus();
     state.settings = status.settings || state.settings;
     state.activeProfileId = status.settings?.profileId || status.profile?.steamId64 || '';
     state.activePersona = status.profile?.persona || status.settings?.persona || '';
+    state.steamRunning = Boolean(status.steamRunning);
+    state.steamPersona = status.profile?.persona || '';
     elements.apiKeyInput.value = state.settings.apiKey || '';
     setLanguageValue(state.settings.language);
     setThemeValue(state.settings.theme);
@@ -1382,21 +1943,18 @@ async function loadStatusAndGames() {
     applyAppearance();
     applyUiLanguage();
 
-    if (status.steamRunning && status.profile?.persona) {
-      elements.steamStatus.textContent = `Steam: ${status.profile.persona}`;
-    } else if (status.steamRunning) {
-      elements.steamStatus.textContent = 'Steam: запущено';
+    renderSteamStatus();
+    if (status.steamRunning) {
       if (status.profile?.error) showNotice(status.profile.error, 'warning');
     } else {
-      elements.steamStatus.textContent = 'Steam: не запущено';
-      showNotice('Запустіть Steam і увійдіть в акаунт перед зміною досягнень.', 'warning');
+      showNotice(t('startSteamNotice'), 'warning');
     }
 
-    setLoading('Оновлення списку ігор', 'Читаю локальну бібліотеку, кеш Steam і, якщо доступно, Web API...');
+    setLoading(t('refreshingGames'), t('readingGameLibrary'));
     state.games = await window.sam.listGames({
       apiKey: elements.apiKeyInput.value.trim(),
     });
-    setLoading('Підготовка інтерфейсу', `Знайдено ігор: ${state.games.length}. Оновлюю список і фільтри...`);
+    setLoading(t('preparingInterface'), tFormat('gameCountLoading', { count: state.games.length }));
     await loadHistory({ silent: true });
     renderGames();
   } catch (error) {
@@ -1409,22 +1967,27 @@ async function loadStatusAndGames() {
 
 function formatGameListForNotice(items, label) {
   const rows = (items || []).slice(0, 5).map((item) => `${item.name} (${item.appId})`);
-  if (!rows.length) return `${label}: немає`;
-  const more = items.length > rows.length ? `, ще ${items.length - rows.length}` : '';
-  return `${label}: ${rows.join(', ')}${more}`;
+  if (!rows.length) return tFormat('diagnosticListNone', { label });
+  const more = items.length > rows.length
+    ? tFormat('diagnosticListMore', { count: items.length - rows.length })
+    : '';
+  return tFormat('diagnosticListItems', { label, items: rows.join(', '), more });
 }
 
 async function runLibraryDiagnostics() {
   setBusy(elements.libraryDiagnosticsButton, true);
-  setLoading('Перевірка бібліотеки', 'Перевіряю локальні схеми, іконки, назви, DLC та Steam-блокування...');
+  setLoading(t('checkingLibrary'), t('checkingLibraryDetails'));
   try {
     const report = await window.sam.diagnoseLibrary();
     const lines = [
-      `Перевірено ${report.totalGames || 0} ігор, з досягненнями: ${report.withAchievements || 0}.`,
-      formatGameListForNotice(report.suspiciousNames || [], 'Підозрілі назви'),
-      formatGameListForNotice(report.missingIcons || [], 'Без іконок'),
-      formatGameListForNotice(report.protectedGames || [], 'Steam блокує зміну'),
-      formatGameListForNotice(report.dlcGames || [], 'Є DLC-позначки'),
+      tFormat('librarySummary', {
+        total: report.totalGames || 0,
+        withAchievements: report.withAchievements || 0,
+      }),
+      formatGameListForNotice(report.suspiciousNames || [], t('suspiciousNames')),
+      formatGameListForNotice(report.missingIcons || [], t('missingIcons')),
+      formatGameListForNotice(report.protectedGames || [], t('protectedGames')),
+      formatGameListForNotice(report.dlcGames || [], t('dlcMarkedGames')),
     ];
     showNotice(lines.join(' '), 'info');
   } catch (error) {
@@ -1446,8 +2009,14 @@ async function loadHistory({ silent = false } = {}) {
 
 async function refreshSelectedGame() {
   if (!state.selectedGame) return;
-  if (state.pendingAchievements.size && !window.confirm('Скасувати підготовлені зміни й оновити поточну гру?')) {
-    return;
+  if (state.pendingAchievements.size) {
+    const confirmed = await showAppDialog({
+      title: t('dialogRefreshGameTitle'),
+      message: t('discardPendingConfirm'),
+      confirmLabel: t('refresh'),
+      cancelLabel: t('cancel'),
+    });
+    if (!confirmed) return;
   }
   await selectGame(state.selectedGame, { force: true });
 }
@@ -1464,14 +2033,15 @@ function getGameCacheKey(game) {
 function getStateNotice(stateStatus, hasAchievements) {
   if (!hasAchievements) return '';
   const status = String(stateStatus || '');
+  if (status === 'partial') return t('statePartialNotice');
   if (status === 'missing-profile') {
-    return 'Не вдалося визначити поточний Steam-акаунт. Відкрийте Steam і натисніть оновлення.';
+    return t('stateMissingProfileNotice');
   }
   if (status === 'skipped-web-api') {
-    return 'Список досягнень завантажено без запуску гри через Steamworks. Щоб бачити точний стан галочок без позначки "грає", додайте Steam Web API key або відкрийте профіль.';
+    return t('stateSkippedWebApiNotice');
   }
   if (status === 'unavailable') {
-    return 'Не вдалося прочитати поточний стан галочок без запуску гри через Steamworks. Додайте Steam Web API key або відкрийте профіль, щоб бачити точний стан.';
+    return t('stateUnavailableNotice');
   }
   return '';
 }
@@ -1498,6 +2068,17 @@ function applyLoadedGameResult(result) {
 }
 
 async function selectGame(game, { force = false } = {}) {
+  const switchingGame = state.selectedGame && Number(state.selectedGame.appId) !== Number(game.appId);
+  if (switchingGame && state.pendingAchievements.size) {
+    const confirmed = await showAppDialog({
+      title: t('dialogSwitchGameTitle'),
+      message: tFormat('discardPendingSwitchGame', { game: game.name }),
+      confirmLabel: t('confirm'),
+      cancelLabel: t('cancel'),
+    });
+    if (!confirmed) return false;
+  }
+
   state.selectedGame = game;
   state.selectedKeys.clear();
   setAchievementsState([]);
@@ -1513,17 +2094,17 @@ async function selectGame(game, { force = false } = {}) {
   if (cached) {
     const notice = applyLoadedGameResult(cached);
     const riskNotice = isRiskyGame(game)
-      ? 'Увага: це онлайн/VAC або античіт-чутлива гра. Змінюйте досягнення тільки якщо розумієте ризики.'
+      ? t('riskyGameNotice')
       : '';
     showNotice(notice || riskNotice, notice || riskNotice ? 'warning' : 'info');
     renderSelection();
-    return;
+    return true;
   }
 
   if (force) state.gameCache.delete(cacheKey);
   const loadToken = ++state.loadToken;
-  setLoading('Завантаження досягнень', `${game.name}: читаю Steam schema, DLC і статуси досягнень...`);
-  showNotice('Завантаження даних гри...');
+  setLoading(t('loadingAchievements'), tFormat('loadingAchievementDetails', { name: game.name }));
+  showNotice(t('loadingGameData'));
 
   try {
     const result = await window.sam.loadGame({
@@ -1532,17 +2113,19 @@ async function selectGame(game, { force = false } = {}) {
       language: elements.languageInput.value || 'ukrainian',
       steamId64: state.activeProfileId,
     });
-    if (loadToken !== state.loadToken || Number(state.selectedGame?.appId) !== Number(game.appId)) return;
+    if (loadToken !== state.loadToken || Number(state.selectedGame?.appId) !== Number(game.appId)) return false;
 
     setGameCacheEntry(cacheKey, result);
-    setLoading('Підготовка списку', `${game.name}: застосовую фільтри, назви та іконки...`);
+    setLoading(t('preparingAchievementList'), tFormat('preparingAchievementDetails', { name: game.name }));
     const notice = applyLoadedGameResult(result);
     const riskNotice = isRiskyGame(game)
-      ? 'Увага: це онлайн/VAC або античіт-чутлива гра. Змінюйте досягнення тільки якщо розумієте ризики.'
+      ? t('riskyGameNotice')
       : '';
     showNotice(notice || riskNotice, notice || riskNotice ? 'warning' : 'info');
+    return true;
   } catch (error) {
     showNotice(error.message, 'error');
+    return false;
   } finally {
     if (loadToken === state.loadToken) setLoading('');
     renderSelection();
@@ -1553,7 +2136,7 @@ function cancelPendingChanges() {
   if (!state.pendingAchievements.size) return;
   state.pendingAchievements.clear();
   renderAchievements();
-  showNotice('Підготовлені зміни скасовано.');
+  showNotice(t('pendingChangesCanceled'));
 }
 
 function clearSelection() {
@@ -1567,22 +2150,16 @@ function renderSelectionBar() {
   if (!elements.selectionBar) return;
   elements.selectionBar.classList.toggle('hidden', count === 0);
   if (!count) return;
-  const lang = getUiLanguage();
-  elements.selectionCount.textContent = lang === 'english' ? `${count} selected` : `Вибрано: ${count}`;
-  if (elements.unlockSelectedButton) elements.unlockSelectedButton.textContent = lang === 'english' ? 'Unlock' : 'Розблокувати';
-  if (elements.lockSelectedButton) elements.lockSelectedButton.textContent = lang === 'english' ? 'Lock' : 'Заблокувати';
+  elements.selectionCount.textContent = tFormat('selectedCount', { count });
+  if (elements.unlockSelectedButton) elements.unlockSelectedButton.textContent = t('unlockSelected');
+  if (elements.lockSelectedButton) elements.lockSelectedButton.textContent = t('lockSelected');
 }
 
 function setSelectedAchievements(achieved) {
   const selected = state.achievements.filter((a) => state.selectedKeys.has(getAchievementKey(a)));
   const editable = selected.filter((a) => !isAchievementChangeProtected(a));
   if (!editable.length) {
-    showToast(
-      getUiLanguage() === 'english'
-        ? 'None of the selected achievements can be changed.'
-        : 'Жодне з вибраних досягнень не можна змінити.',
-      'warning'
-    );
+    showToast(t('selectedNotEditable'), 'warning');
     return;
   }
   for (const achievement of editable) {
@@ -1590,22 +2167,22 @@ function setSelectedAchievements(achieved) {
   }
   clearSelection();
   renderAchievements();
-  showNotice(
-    getUiLanguage() === 'english'
-      ? `${editable.length} achievements queued. Press ✓ to apply.`
-      : `${editable.length} досягнень у черзі. Натисніть ✓, щоб підтвердити.`
-  );
+  showNotice(state.pendingAchievements.size
+    ? tFormat('queuedChanges', { count: state.pendingAchievements.size })
+    : '');
 }
 
 function queueAchievementChange(achievement, achieved) {
   if (isAchievementChangeProtected(achievement)) {
-    showNotice('Steam заблокував це досягнення для ручної зміни.', 'warning');
+    showNotice(achievement.stateKnown === false
+      ? t('stateUnknownNotice')
+      : t('achievementProtectedNotice'), 'warning');
     return;
   }
   setPendingAchievement(achievement, achieved);
   renderAchievements();
   showNotice(state.pendingAchievements.size
-    ? `Підготовлено змін: ${state.pendingAchievements.size}. Натисніть ✓, щоб відправити їх у Steam.`
+    ? tFormat('queuedChanges', { count: state.pendingAchievements.size })
     : '');
 }
 
@@ -1614,7 +2191,7 @@ function setAllAchievements(achieved) {
   const visibleAchievements = getFilteredAchievements();
   const editableAchievements = visibleAchievements.filter((achievement) => !isAchievementChangeProtected(achievement));
   if (!editableAchievements.length) {
-    showNotice('Немає видимих досягнень, які Steam дозволяє змінювати вручну.', 'warning');
+    showNotice(t('noVisibleEditable'), 'warning');
     return;
   }
 
@@ -1623,7 +2200,7 @@ function setAllAchievements(achieved) {
   }
 
   renderAchievements();
-  showNotice(`${editableAchievements.length} видимих досягнень позначено для ${achieved ? 'розблокування' : 'блокування'}. Натисніть ✓, щоб підтвердити.`);
+  showNotice(tFormat(achieved ? 'visibleUnlockQueued' : 'visibleLockQueued', { count: editableAchievements.length }));
 }
 
 function getAchievementByKey(key) {
@@ -1657,53 +2234,53 @@ function getAchievementSnapshot() {
     hidden: Boolean(achievement.hidden),
     metadataIncomplete: Boolean(achievement.metadataIncomplete),
     changeProtected: Boolean(achievement.changeProtected),
+    stateKnown: achievement.stateKnown !== false,
     achieved: Boolean(achievement.achieved),
     unlockTime: Number(achievement.unlockTime || 0),
   }));
 }
 
 function getDetailedChanges() {
-  return [...state.pendingAchievements.entries()]
-    .map(([key, achieved]) => {
-      const achievement = getAchievementByKey(key);
-      const separator = key.indexOf(':');
-      const fallbackAppId = Number(separator >= 0 ? key.slice(0, separator) : state.selectedGame?.appId || 0);
-      const fallbackId = separator >= 0 ? key.slice(separator + 1) : key;
-      return {
-        appId: Number(achievement?.appId || fallbackAppId),
-        id: achievement?.id || fallbackId,
-        achieved,
-        displayName: getAchievementNameByKey(key),
-        sourceAppName: achievement?.sourceAppName || '',
-      };
-    })
-    .filter((change) => Number.isInteger(change.appId) && change.appId > 0 && change.id);
-}
-
-function formatConfirmList(title, changes) {
-  if (!changes.length) return '';
-  const visible = changes.slice(0, 12).map((change) => (
-    `- ${change.displayName}${change.sourceAppName ? ` (${change.sourceAppName})` : ''}`
-  ));
-  const hiddenCount = changes.length - visible.length;
-  return `${title} (${changes.length}):\n${visible.join('\n')}${hiddenCount > 0 ? `\n...і ще ${hiddenCount}` : ''}`;
+  return window.AchievementDiff.buildAchievementDiff(
+    state.achievements,
+    state.pendingAchievements,
+    state.selectedGame?.appId
+  ).map((change) => ({
+    ...change,
+    displayName: getAchievementNameByKey(change.key),
+  }));
 }
 
 function translateFailureReason(reason) {
   const text = String(reason || '');
   if (text.includes('Steam rejected the change after stats were loaded')) {
-    return 'Steam завантажив статистику, але відхилив зміну.';
+    return t('failureAfterStatsLoaded');
   }
   if (text.includes('Steam does not see this achievement API name')) {
-    return 'Steam не бачить це досягнення у поточній сесії.';
+    return t('failureMissingAchievement');
   }
   if (text.includes('Steam API could not initialize')) {
-    return 'Steam API не вдалося запустити для цієї гри.';
+    return t('failureInit');
   }
   if (text.includes('Steam did not return the user stats interface')) {
-    return 'Steam не повернув модуль статистики для цієї гри.';
+    return t('failureStatsInterface');
   }
-  return text || 'Steam відхилив зміну.';
+  if (text.includes('Steam schema marks this achievement as read-only')) {
+    return t('failureReadOnlyAchievement');
+  }
+  return text || t('failureGeneric');
+}
+
+function translateStatsError(message) {
+  const text = String(message || '');
+  if (text.includes('Steam schema marks this stat as read-only')) return t('statProtected');
+  if (text.includes('Steam schema contains read-only stats')) return t('resetStatsProtected');
+  if (text.includes('Invalid stat change') || text.includes('invalid-average-rate-session')) return t('statInvalidChange');
+  if (text.includes('Unsupported stat type')) return t('statUnsupportedType');
+  if (text.includes('Steam rejected the stat change') || text.includes('steam-rejected-stat-change')) return t('statRejected');
+  if (text.includes('Steam API could not initialize')) return t('failureInit');
+  if (text.includes('Steam did not return the user stats interface')) return t('failureStatsInterface');
+  return text;
 }
 
 function formatFailureDetails(failed) {
@@ -1713,7 +2290,7 @@ function formatFailureDetails(failed) {
     return `${name}: ${reason}`;
   });
   const hiddenCount = failed.length - visible.length;
-  return `${visible.join(' · ')}${hiddenCount > 0 ? ` · і ще ${hiddenCount}` : ''}`;
+  return `${visible.join(' · ')}${hiddenCount > 0 ? ` · ${tFormat('moreItemsInline', { count: hiddenCount })}` : ''}`;
 }
 
 async function loadBackupForCurrentState(backupPath) {
@@ -1728,7 +2305,8 @@ async function loadBackupForCurrentState(backupPath) {
       appId,
       name: backup.game?.name || `App ${appId}`,
     };
-    await selectGame(game);
+    const selected = await selectGame(game);
+    if (!selected) return null;
   }
 
   return backup;
@@ -1736,95 +2314,149 @@ async function loadBackupForCurrentState(backupPath) {
 
 function getBackupDifferences(backup) {
   const backupById = new Map((backup.achievements || []).map((achievement) => [getBackupAchievementKey(achievement, backup), achievement]));
-  return state.achievements
+  const pendingChanges = state.achievements
     .map((achievement) => {
       const saved = backupById.get(getAchievementKey(achievement));
-      if (!saved || Boolean(saved.achieved) === Boolean(achievement.achieved)) return null;
-      return {
-        key: getAchievementKey(achievement),
-        appId: Number(achievement.appId || state.selectedGame?.appId || 0),
-        id: achievement.id,
-        displayName: achievement.displayName || saved.displayName || achievement.id,
-        sourceAppName: achievement.sourceAppName || saved.sourceAppName || '',
-        current: Boolean(achievement.achieved),
-        backup: Boolean(saved.achieved),
-      };
+      if (!saved || saved.stateKnown === false) return null;
+      return [getAchievementKey(achievement), Boolean(saved.achieved)];
     })
     .filter(Boolean);
+
+  return window.AchievementDiff.buildAchievementDiff(
+    state.achievements,
+    pendingChanges,
+    state.selectedGame?.appId
+  ).map((change) => ({
+    ...change,
+    displayName: getAchievementNameByKey(change.key),
+    current: change.before,
+    backup: change.after,
+  }));
 }
 
 async function compareBackup(backupPath) {
   try {
     const backup = await loadBackupForCurrentState(backupPath);
+    if (!backup) return;
     const differences = getBackupDifferences(backup);
-    const visible = differences.slice(0, 20).map((item) => {
-      const direction = item.backup ? 'має бути розблоковано' : 'має бути заблоковано';
-      return `- ${item.displayName}: ${direction}`;
+    const blockedCount = differences.filter((item) => !item.allowed).length;
+    await showAppDialog({
+      title: t('dialogBackupComparisonTitle'),
+      message: differences.length
+        ? `${tFormat('backupDifferences', { count: differences.length })}${blockedCount ? `\n${tFormat('backupReadOnlySkipped', { count: blockedCount })}` : ''}`
+        : t('backupMatches'),
+      diffItems: differences.map((item) => ({
+        name: `${item.displayName}${item.sourceAppName ? ` (${item.sourceAppName})` : ''}${item.allowed ? '' : ` · ${t('readOnlyLabel')}`}`,
+        before: item.current,
+        after: item.backup,
+      })),
+      confirmLabel: t('close'),
     });
-    window.alert(differences.length
-      ? `Відмінностей з backup: ${differences.length}\n\n${visible.join('\n')}${differences.length > visible.length ? `\n...і ще ${differences.length - visible.length}` : ''}`
-      : 'Поточний стан збігається з цим backup.');
   } catch (error) {
     showNotice(error.message, 'error');
   }
 }
 
-async function restoreBackup(backupPath) {
+async function prepareBackupChanges(backupPath, mode = 'restore') {
   try {
     const backup = await loadBackupForCurrentState(backupPath);
+    if (!backup) return;
     const differences = getBackupDifferences(backup);
     if (!differences.length) {
-      showNotice('Поточний стан уже збігається з цим backup.');
+      showNotice(t('backupMatches'));
+      return;
+    }
+    const editable = differences.filter((difference) => difference.allowed);
+    const blockedCount = differences.length - editable.length;
+    if (!editable.length) {
+      showNotice(t('backupOnlyReadOnly'), 'warning');
       return;
     }
 
-    const confirmed = window.confirm(
-      `Підготувати відновлення з backup для гри "${backup.game?.name || state.selectedGame.name}"?\n\nЗмін буде підготовлено: ${differences.length}\n\nЗміни не будуть відправлені в Steam автоматично. Після цього натисніть ✓ для підтвердження.`
-    );
+    const confirmed = await showAppDialog({
+      title: t(mode === 'undo' ? 'dialogUndoTitle' : 'dialogBackupRestoreTitle'),
+      message: tFormat(mode === 'undo' ? 'undoConfirm' : 'backupRestoreConfirm', {
+        game: backup.game?.name || state.selectedGame.name,
+        count: editable.length,
+        skipped: blockedCount ? tFormat('backupReadOnlySkipped', { count: blockedCount }) : '',
+      }),
+      diffItems: editable.map((item) => ({
+        name: `${item.displayName}${item.sourceAppName ? ` (${item.sourceAppName})` : ''}`,
+        before: item.current,
+        after: item.backup,
+      })),
+      confirmLabel: t('prepare'),
+      cancelLabel: t('cancel'),
+    });
     if (!confirmed) return;
 
     state.pendingAchievements.clear();
     const byKey = new Map(state.achievements.map((achievement) => [getAchievementKey(achievement), achievement]));
-    for (const difference of differences) {
+    for (const difference of editable) {
       const achievement = byKey.get(difference.key);
       if (achievement) setPendingAchievement(achievement, difference.backup);
     }
 
     renderAchievements();
-    showNotice(`Відновлення підготовлено: ${state.pendingAchievements.size} змін. Натисніть ✓, щоб застосувати.`);
+    showNotice(tFormat(mode === 'undo' ? 'undoQueued' : 'backupRestoreQueued', { count: state.pendingAchievements.size }));
   } catch (error) {
     showNotice(error.message, 'error');
   }
+}
+
+function restoreBackup(backupPath) {
+  return prepareBackupChanges(backupPath, 'restore');
+}
+
+function undoHistoryEntry(entry) {
+  return prepareBackupChanges(entry.backupPath, 'undo');
 }
 
 async function applyAchievementChanges() {
   if (!state.selectedGame || !state.pendingAchievements.size) return;
 
   const detailedChanges = getDetailedChanges();
-  const blockedChanges = detailedChanges.filter((change) => isAchievementChangeProtected(getAchievementByKey(getChangeKey(change))));
+  if (!detailedChanges.length) {
+    state.pendingAchievements.clear();
+    renderAchievements();
+    showNotice(t('noChangesToApply'));
+    return;
+  }
+  const blockedChanges = detailedChanges.filter((change) => !change.allowed);
   if (blockedChanges.length) {
     for (const change of blockedChanges) {
       state.pendingAchievements.delete(getChangeKey(change));
     }
     renderAchievements();
-    showNotice('Steam заблокував ці досягнення для ручної зміни. Я прибрав їх із черги.', 'warning');
+    showNotice(t('blockedChangesRemoved'), 'warning');
     return;
   }
   const changes = detailedChanges.map(({ appId, id, achieved }) => ({ appId, id, achieved }));
   const unlockCount = changes.filter((change) => change.achieved).length;
   const lockCount = changes.length - unlockCount;
-  const unlockList = formatConfirmList('Розблокувати', detailedChanges.filter((change) => change.achieved));
-  const lockList = formatConfirmList('Заблокувати', detailedChanges.filter((change) => !change.achieved));
-  const confirmed = window.confirm(
-    `Підтвердити зміни для гри "${state.selectedGame.name}"?\n\nРозблокувати: ${unlockCount}\nЗаблокувати: ${lockCount}\n\n${[unlockList, lockList].filter(Boolean).join('\n\n')}\n\nПеред змінами буде створено backup. Після підтвердження зміни буде відправлено в Steam.`
-  );
+  const confirmed = await showAppDialog({
+    title: t('dialogApplyChangesTitle'),
+    message: tFormat('applyConfirm', {
+      game: state.selectedGame.name,
+      unlocks: unlockCount,
+      locks: lockCount,
+      preview: t('dryRunChanges'),
+    }),
+    diffItems: detailedChanges.map((change) => ({
+      name: `${change.displayName}${change.sourceAppName ? ` (${change.sourceAppName})` : ''}`,
+      before: change.before,
+      after: change.after,
+    })),
+    confirmLabel: t('apply'),
+    cancelLabel: t('cancel'),
+  });
 
   if (!confirmed) return;
 
   setBusy(elements.applyAchievementChangesButton, true);
   elements.unlockAllButton.disabled = true;
   elements.lockAllButton.disabled = true;
-  showNotice('Створення backup перед змінами...');
+  showNotice(t('creatingBackup'));
 
   try {
     const backup = await window.sam.createAchievementBackup({
@@ -1836,7 +2468,7 @@ async function applyAchievementChanges() {
       changes: detailedChanges,
     });
 
-    showNotice('Відправлення змін у Steam...');
+    showNotice(t('sendingChanges'));
     const result = await window.sam.applyAchievementChanges({
       appId: state.selectedGame.appId,
       changes,
@@ -1889,9 +2521,9 @@ async function applyAchievementChanges() {
 
     if (failed.length) {
       const details = formatFailureDetails(failed);
-      showToast(`Готово частково: застосовано ${changed.length}, не вдалося застосувати ${failed.length}. ${details}`, 'warning', 6000);
+      showToast(tFormat('applyPartial', { changed: changed.length, failed: failed.length, details }), 'warning', 6000);
     } else {
-      showToast(`Зміни застосовано: ${changed.length}. Backup збережено.`, 'success');
+      showToast(tFormat('applySuccess', { changed: changed.length }), 'success');
     }
   } catch (error) {
     showNotice(error.message, 'error');
@@ -1907,7 +2539,6 @@ async function loadStats() {
   try {
     state.stats = await window.sam.readStats({
       appId: state.selectedGame.appId,
-      stats: state.statsSchema,
     });
     showNotice('');
   } catch (error) {
@@ -1925,7 +2556,7 @@ async function runSteamworksDiagnostics() {
     state.steamworksDiagnostics = await window.sam.diagnoseSteamworks({
       appId: state.selectedGame.appId,
     });
-    showToast(getUiLanguage() === 'english' ? 'Steamworks check completed.' : 'Перевірку Steamworks завершено.', 'success');
+    showToast(t('steamworksCheckComplete'), 'success');
   } catch (error) {
     state.steamworksDiagnostics = { error: error.message };
     showNotice(error.message, 'error');
@@ -1935,20 +2566,21 @@ async function runSteamworksDiagnostics() {
   }
 }
 
-async function saveStat(name, type, value, button) {
+async function saveStat(name, value, button, averageRate = {}) {
   if (!state.selectedGame) return;
   setBusy(button, true);
   try {
     await window.sam.setStat({
       appId: state.selectedGame.appId,
       name,
-      type,
       value,
+      count: averageRate.count,
+      sessionLength: averageRate.sessionLength,
     });
-    showToast(`Статистику збережено: ${name}`, 'success');
+    showToast(tFormat('statSaved', { name }), 'success');
     await loadStats();
   } catch (error) {
-    showNotice(error.message, 'error');
+    showNotice(translateStatsError(error.message), 'error');
   } finally {
     setBusy(button, false);
   }
@@ -1956,20 +2588,45 @@ async function saveStat(name, type, value, button) {
 
 async function resetStats() {
   if (!state.selectedGame) return;
-  const confirmed = window.confirm(
-    getUiLanguage() === 'english'
-      ? `Reset Steam stats for "${state.selectedGame.name}"?\n\nAchievements will not be reset, but in-game stat values may change permanently.`
-      : `Скинути статистику Steam для "${state.selectedGame.name}"?\n\nДосягнення не будуть скинуті, але значення внутрішньоігрової статистики можуть змінитися назавжди.`
-  );
-  if (!confirmed) return;
+  const allStats = state.stats.length ? state.stats : state.statsSchema;
+  if (allStats.some((stat) => stat.changeProtected)) {
+    showNotice(t('resetStatsProtected'), 'warning');
+    return;
+  }
+  const firstConfirmation = await showAppDialog({
+    title: t('dialogResetStatsTitle'),
+    message: tFormat('resetStatsConfirm', { game: state.selectedGame.name }),
+    confirmLabel: t('reset'),
+    cancelLabel: t('cancel'),
+    tone: 'danger',
+  });
+  if (!firstConfirmation) return;
+
+  const riskConfirmation = await showAppDialog({
+    title: t('dialogResetStatsTitle'),
+    message: t('resetStatsConfirmRisk'),
+    confirmLabel: t('confirm'),
+    cancelLabel: t('cancel'),
+    tone: 'danger',
+  });
+  if (!riskConfirmation) return;
+
+  const finalConfirmation = await showAppDialog({
+    title: t('dialogResetStatsTitle'),
+    message: tFormat('resetStatsConfirmFinal', { game: state.selectedGame.name }),
+    confirmLabel: t('reset'),
+    cancelLabel: t('cancel'),
+    tone: 'danger',
+  });
+  if (!finalConfirmation) return;
 
   setBusy(elements.resetStatsButton, true);
   try {
     await window.sam.resetStats({ appId: state.selectedGame.appId });
-    showToast(getUiLanguage() === 'english' ? 'Stats reset.' : 'Статистику скинуто.', 'success');
+    showToast(t('statsReset'), 'success');
     await loadStats();
   } catch (error) {
-    showNotice(error.message, 'error');
+    showNotice(translateStatsError(error.message), 'error');
   } finally {
     setBusy(elements.resetStatsButton, false);
   }
@@ -1989,7 +2646,7 @@ async function saveSettings({ silent = false } = {}) {
     });
     applyAppearance();
     applyUiLanguage();
-    if (!silent) showToast(state.activeProfileId ? 'Налаштування збережено для поточного Steam-акаунта.' : 'Налаштування збережено.', 'success');
+    if (!silent) showToast(t(state.activeProfileId ? 'settingsSavedForAccount' : 'settingsSaved'), 'success');
   } catch (error) {
     showNotice(error.message, 'error');
   } finally {

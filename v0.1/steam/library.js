@@ -193,8 +193,7 @@ function extractAppNameAt(buffer, offset) {
   const strings = extractPrintableStrings(buffer.subarray(offset, Math.min(buffer.length, offset + sectionSize)));
   const gameIndex = strings.findIndex((value) => value.toLowerCase() === 'game');
   const candidate = gameIndex > 0 ? strings[gameIndex - 1] : '';
-  if (isPlausibleAppName(candidate)) return candidate;
-  return strings.find(isPlausibleAppName) || '';
+  return isPlausibleAppName(candidate) ? candidate : '';
 }
 
 async function readAppInfoNames(steamRoot, appIds) {
@@ -352,11 +351,9 @@ async function readInstalledGames(libraries, options = {}) {
     const appInfoNames = await readAppInfoNames(steamRoot, missingAppIds);
 
     for (const appId of missingAppIds) {
-      const name = appInfoNames.get(appId);
-      if (!name) continue;
       gamesByAppId.set(appId, {
         appId,
-        name,
+        name: appInfoNames.get(appId) || `App ${appId}`,
         icon: '',
         installDir: '',
         library: steamRoot,
@@ -397,6 +394,7 @@ async function mapWithConcurrency(items, limit, fn) {
 }
 
 module.exports = {
+  findSteamRoot,
   findSteamLibraries,
   readInstalledGames,
 };

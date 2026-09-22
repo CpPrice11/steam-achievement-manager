@@ -37,3 +37,7 @@ $RECYCLE.BIN/
 
 # Claude Code local settings
 .claude/
+
+# Codex project state and ad-hoc release output
+.codex/
+ReleaseSetup/
