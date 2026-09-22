@@ -34,13 +34,20 @@ async function pathExists(target) {
   }
 }
 
-async function hasLocalAchievementSchema(steamRoot, appId) {
+async function getLocalAchievementSchemaInfo(steamRoot, appId) {
   const schemaPath = path.join(steamRoot, 'appcache', 'stats', `UserGameStatsSchema_${appId}.bin`);
   try {
     const buffer = await fs.readFile(schemaPath);
-    return buffer.includes(Buffer.from('icon_gray')) || buffer.includes(Buffer.from('icon'));
+    const nameStart = buffer.indexOf(Buffer.from('gamename\0'));
+    const valueStart = nameStart < 0 ? -1 : nameStart + 'gamename\0'.length;
+    const valueEnd = valueStart < 0 ? -1 : buffer.indexOf(0, valueStart);
+    const name = valueEnd > valueStart ? buffer.subarray(valueStart, valueEnd).toString('utf8').trim() : '';
+    return {
+      hasAchievements: buffer.includes(Buffer.from('icon_gray')) || buffer.includes(Buffer.from('icon')),
+      name: isPlausibleAppName(name) ? name : '',
+    };
   } catch {
-    return false;
+    return { hasAchievements: false, name: '' };
   }
 }
 
@@ -367,12 +374,15 @@ async function readInstalledGames(libraries, options = {}) {
   if (steamRoot) {
     const games = [...gamesByAppId.values()];
     await mapWithConcurrency(games, 8, async (game) => {
-      const [icon, hasAchievements] = await Promise.all([
+      const [icon, schemaInfo] = await Promise.all([
         getLocalGameIcon(steamRoot, game.appId),
-        hasLocalAchievementSchema(steamRoot, game.appId),
+        getLocalAchievementSchemaInfo(steamRoot, game.appId),
       ]);
       game.icon = icon || getSteamStoreIcon(game.appId);
-      game.hasAchievements = hasAchievements;
+      game.hasAchievements = schemaInfo.hasAchievements;
+      if (schemaInfo.name && (game.name === `App ${game.appId}` || !isPlausibleAppName(game.name))) {
+        game.name = schemaInfo.name;
+      }
     });
   }
 

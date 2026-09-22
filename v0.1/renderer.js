@@ -214,7 +214,6 @@ const UI_TRANSLATIONS = {
     hiddenAchievementDescription: 'Steam не повернув відкриту назву або опис для цього досягнення.',
     metadataAchievement: 'Досягнення без метаданих',
     metadataAchievementDescription: 'Steam повернув API-назву, але не повернув відкриту назву або опис.',
-    metadataUnavailable: 'Метадані досягнення недоступні',
     dlcFirst: 'DLC спочатку',
     newestUnlocks: 'Новіші розблокування',
     oldestUnlocks: 'Старіші розблокування',
@@ -481,7 +480,6 @@ const UI_TRANSLATIONS = {
     hiddenAchievementDescription: 'Steam did not return a public name or description for this achievement.',
     metadataAchievement: 'Achievement without metadata',
     metadataAchievementDescription: 'Steam returned the API name, but did not return a public title or description.',
-    metadataUnavailable: 'Achievement metadata unavailable',
     dlcFirst: 'DLC first',
     newestUnlocks: 'Newest unlocks',
     oldestUnlocks: 'Oldest unlocks',
@@ -1585,7 +1583,6 @@ function renderAchievements() {
       <span>${escapeHtml(presentation.description)}</span>
       ${dlcLabel ? `<em>${escapeHtml(dlcLabel)}</em>` : ''}
       ${presentation.hiddenLike ? `<em>${escapeHtml(t('hidden'))}</em>` : ''}
-      ${presentation.missingMetadata ? `<em>${escapeHtml(t('metadataUnavailable'))}: ${escapeHtml(achievement.id)}</em>` : ''}
       ${achievement.stateKnown === false
         ? `<em>${escapeHtml(t('stateUnknown'))}</em>`
         : (isProtected ? `<em>${escapeHtml(t('achievementProtectedLabel'))}</em>` : '')}

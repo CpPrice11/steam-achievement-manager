@@ -79,3 +79,27 @@ test('stat type normalization accepts Steam schema aliases', () => {
   assert.equal(normalizeStatType('AVGRATE'), 'avgrate');
   assert.equal(normalizeStatType('unknown'), 'unknown');
 });
+
+test('long localized achievement blocks keep titles, descriptions and icons', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'my-sam-long-schema-'));
+  try {
+    const statsDir = path.join(root, 'appcache', 'stats');
+    await fs.mkdir(statsDir, { recursive: true });
+    const languages = Array.from({ length: 65 }, (_, index) => ['german', `Name ${index}`]).flat();
+    await fs.writeFile(path.join(statsDir, 'UserGameStatsSchema_400.bin'), Buffer.from([
+      'name', 'PORTAL_GET_PORTALGUNS',
+      'display', 'name', 'token', 'PORTAL_GET_PORTALGUNS_NAME', 'english', 'Lab Rat', ...languages,
+      'desc', 'token', 'PORTAL_GET_PORTALGUNS_DESC', 'english', 'Acquire the portal gun.', ...languages,
+      'hidden', '0', 'icon', 'portal_getportalguns.jpg', 'icon_gray', 'portal_getportalguns_bw.jpg',
+    ].join('\0')));
+
+    const schema = await getLocalGameSchema(400, 'english', [root]);
+    assert.equal(schema.achievements.length, 1);
+    assert.equal(schema.stats.length, 0);
+    assert.equal(schema.achievements[0].displayName, 'Lab Rat');
+    assert.equal(schema.achievements[0].description, 'Acquire the portal gun.');
+    assert.equal(schema.achievements[0].icon, 'https://cdn.akamai.steamstatic.com/steamcommunity/public/images/apps/400/portal_getportalguns.jpg');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

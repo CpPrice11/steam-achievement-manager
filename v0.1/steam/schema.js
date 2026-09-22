@@ -169,6 +169,8 @@ function readLocalized(tokens, start, language) {
   const wanted = (language || 'english').toLowerCase();
   const values = new Map();
 
+  if (tokens[start] === 'token') start += 2;
+
   for (let index = start; index < tokens.length; index++) {
     const key = String(tokens[index] || '').toLowerCase();
     if (key === 'token' || key === 'desc' || key === 'hidden' || key === 'icon' || key === 'icon_gray') break;
@@ -195,10 +197,10 @@ function parseLocalSchemaBuffer(appId, buffer, language) {
     const apiName = tokens[index + 1];
     if (seen.has(apiName)) continue;
 
-    let end = Math.min(tokens.length, index + 120);
+    let end = tokens.length;
     for (let next = index + 2; next < tokens.length - 1; next++) {
       if (next > index + 2 && tokens[next] === 'name' && isApiName(tokens[next + 1])) {
-        end = Math.min(end, next);
+        end = next;
         break;
       }
     }

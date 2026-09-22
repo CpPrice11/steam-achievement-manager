@@ -24,6 +24,7 @@ test('appinfo uses a confirmed game name instead of arbitrary metadata', async (
     await fs.mkdir(path.join(root, 'steamapps'), { recursive: true });
     await fs.mkdir(configDir, { recursive: true });
     await fs.mkdir(cacheDir, { recursive: true });
+    await fs.mkdir(path.join(cacheDir, 'stats'), { recursive: true });
     await fs.writeFile(path.join(configDir, 'localconfig.vdf'),
       '"UserLocalConfigStore" { "Software" { "Valve" { "Steam" { "apps" { "1111" {} "2222" {} "3333" {} "4444" {} } } } } }');
     await fs.writeFile(path.join(cacheDir, 'appinfo.vdf'), Buffer.concat([
@@ -32,11 +33,13 @@ test('appinfo uses a confirmed game name instead of arbitrary metadata', async (
       appInfoRecord(3333, ['windows,macos,linux', 'Game']),
       appInfoRecord(4444, ['2=Rj', 'Game']),
     ]));
+    await fs.writeFile(path.join(cacheDir, 'stats', 'UserGameStatsSchema_2222.bin'),
+      Buffer.from('gamename\0Portal\0icon\0portal.jpg\0'));
 
     const games = await readInstalledGames([root], { includeLocalConfig: true });
     const names = new Map(games.map((game) => [game.appId, game.name]));
     assert.equal(names.get(1111), 'Actual Game Title');
-    assert.equal(names.get(2222), 'App 2222');
+    assert.equal(names.get(2222), 'Portal');
     assert.equal(names.get(3333), 'App 3333');
     assert.equal(names.get(4444), 'App 4444');
   } finally {
