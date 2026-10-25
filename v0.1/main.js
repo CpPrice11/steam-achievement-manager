@@ -41,7 +41,7 @@ function createWindow() {
     minWidth: 860,
     minHeight: 560,
     title: 'Steam Achievement Manager',
-    icon: path.join(__dirname, 'assets', 'app-icon-pullora.ico'),
+    icon: path.join(__dirname, 'assets', 'app-icon-steam-achievements-v2.ico'),
     backgroundColor: '#101216',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

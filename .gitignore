@@ -41,3 +41,4 @@ $RECYCLE.BIN/
 # Codex project state and ad-hoc release output
 .codex/
 ReleaseSetup/
+release-assets/

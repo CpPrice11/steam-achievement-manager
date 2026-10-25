@@ -1,6 +1,6 @@
 {
   "name": "my-sam",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Compact Windows desktop Steam achievement and stats manager.",
   "main": "v0.1/main.js",
   "private": true,
@@ -11,8 +11,9 @@
     "dist:setup": "electron-builder --win nsis --config.directories.output=Setup",
     "dist:portable": "electron-builder --win portable --config.directories.output=Portable",
     "dist": "npm run dist:setup && npm run dist:portable",
-    "check": "node --check v0.1/main.js && node --check v0.1/preload.js && node --check v0.1/renderer.js && node --check v0.1/domain/achievement-diff.js && node --check v0.1/domain/achievement-state.js && node --check v0.1/domain/dlc-classifier.js && node --check v0.1/domain/game-provenance.js && node --check v0.1/domain/history-undo.js && node --check v0.1/steam/library.js && node --check v0.1/steam/store.js && node --check v0.1/steam/dlc-discovery.js && node --check v0.1/steam/schema.js && node --check v0.1/steam/worker.js && node --check v0.1/tests/achievement-diff.test.js && node --check v0.1/tests/history-undo.test.js && node --check v0.1/tests/schema.test.js && node --check v0.1/tests/achievement-state.test.js && node --check v0.1/tests/steam-library.test.js && node --check v0.1/tests/steam-store.test.js && node --check v0.1/tests/game-provenance.test.js && node --check v0.1/tests/dlc-discovery.test.js",
-    "test": "node --test v0.1/tests/*.test.js"
+    "release:prepare-pullora": "node scripts/prepare-pullora-release.cjs",
+    "check": "node --check v0.1/main.js && node --check v0.1/preload.js && node --check v0.1/renderer.js && node --check v0.1/domain/achievement-diff.js && node --check v0.1/domain/achievement-state.js && node --check v0.1/domain/dlc-classifier.js && node --check v0.1/domain/game-provenance.js && node --check v0.1/domain/history-undo.js && node --check v0.1/steam/library.js && node --check v0.1/steam/store.js && node --check v0.1/steam/dlc-discovery.js && node --check v0.1/steam/schema.js && node --check v0.1/steam/worker.js && node --check v0.1/tests/achievement-diff.test.js && node --check v0.1/tests/history-undo.test.js && node --check v0.1/tests/schema.test.js && node --check v0.1/tests/achievement-state.test.js && node --check v0.1/tests/steam-library.test.js && node --check v0.1/tests/steam-store.test.js && node --check v0.1/tests/game-provenance.test.js && node --check v0.1/tests/dlc-discovery.test.js && node --check scripts/prepare-pullora-release.cjs && node --check scripts/prepare-pullora-release.test.cjs",
+    "test": "node --test v0.1/tests/*.test.js scripts/prepare-pullora-release.test.cjs"
   },
   "dependencies": {
     "steamworks.js": "^0.4.0"
@@ -34,7 +35,7 @@
       "v0.1/steam/helpers/**/*"
     ],
     "win": {
-      "icon": "v0.1/assets/app-icon-pullora.ico"
+      "icon": "v0.1/assets/app-icon-steam-achievements-v2.ico"
     },
     "nsis": {
       "oneClick": true,

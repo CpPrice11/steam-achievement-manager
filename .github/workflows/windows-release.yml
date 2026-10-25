@@ -1,0 +1,58 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run dist
+      - run: npm run release:prepare-pullora
+      - name: Verify Windows packages
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "Tag does not match package version $version"
+          }
+          $app = Get-Item 'Setup/win-unpacked/Steam Achievement Manager.exe'
+          if ($app.VersionInfo.ProductName -ne 'Steam Achievement Manager') {
+            throw "Wrong EXE metadata: $($app.VersionInfo.ProductName)"
+          }
+          $folder = "release-assets/v$version"
+          foreach ($line in Get-Content "$folder/SHA256SUMS.txt") {
+            if ($line -notmatch '^([a-f0-9]{64})  ([A-Za-z0-9.-]+)$') { throw 'Invalid checksum line' }
+            $actual = (Get-FileHash -Algorithm SHA256 "$folder/$($Matches[2])").Hash.ToLowerInvariant()
+            if ($actual -ne $Matches[1]) { throw "Checksum mismatch: $($Matches[2])" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release-${{ github.sha }}
+          path: release-assets/v*/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $files = @(Get-ChildItem -File "release-assets/$tag" | ForEach-Object FullName)
+          if ($files.Count -ne 3) { throw "Expected three release files, found $($files.Count)" }
+          gh release create $tag @files --verify-tag --title $tag --notes-file release-notes/v0.6.2.md

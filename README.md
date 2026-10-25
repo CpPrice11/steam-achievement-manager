@@ -1,7 +1,7 @@
 # MY SAM
 
 <p align="center">
-  <img src="v0.1/assets/app-icon-pullora.png" alt="MY SAM logo" width="128" height="128">
+  <img src="v0.1/assets/app-icon-steam-achievements-v2.png" alt="MY SAM logo" width="128" height="128">
 </p>
 
 Компактний десктоп-менеджер досягнень та ігрової статистики Steam для Windows.
@@ -39,6 +39,34 @@ npm install
 npm run start    # запуск у режимі розробки
 npm run dist     # збірка NSIS-інсталятора у Setup/ та portable у Portable/
 ```
+
+### Пакети для Pullora
+
+[Pullora](https://github.com/CpPrice11/pullora) встановлює програми з GitHub Releases. Для **наступного** релізу MY SAM після збірки виконай:
+
+```powershell
+npm ci
+npm run check
+npm test
+npm run dist
+npm run release:prepare-pullora
+```
+
+Остання команда створює в `release-assets/vX.Y.Z/` два перевірені x64-пакети та `SHA256SUMS.txt`:
+
+```text
+SteamAchievementManager-vX.Y.Z-windows-x64-portable.exe
+SteamAchievementManager-vX.Y.Z-windows-x64-setup.exe
+SHA256SUMS.txt
+```
+
+Вона не створює тег і нічого не публікує. Якщо вже є каталог для цієї версії, команда зупиниться замість перезапису. Перш ніж випускати нову версію, онови `package.json`, перевір запуск обох пакетів на цільових Windows і прикріпи всі три файли до **того самого** stable GitHub Release з відповідним тегом. Не замінюй пакети вже опублікованого `v0.6.1` іншими файлами під тим самим тегом. Setup залишається one-click per-user, portable має запускатися без інсталятора; дані користувача зберігаються поза папкою пакета.
+
+На поточній машині звичайна збірка `electron-builder` блокується на розпакуванні `winCodeSign`: Windows не дозволяє створити символічні посилання. Пробна збірка з `--config.win.signAndEditExecutable=false` перевірила пакування та хеші, але залишила EXE з назвою й іконкою Electron; її **не можна публікувати**. Для релізу потрібна повна збірка з ресурсами застосунку та перевірка запуску на Windows 10/11.
+
+Нова іконка використовує знак Steam у композиції з кубком досягнення. Steam і його знак належать Valve; MY SAM не є офіційним продуктом Valve.
+
+Типова іконка MY SAM уже є в [pullora-assets](https://github.com/CpPrice11/pullora-assets). Скриншотів поки немає; у спільне сховище можна додавати лише справжній інтерфейс без приватних даних. Опублікована Pullora `v5.22.1` ще не містить підготовленої локально інтеграції пакетів та медіа, тому самого випуску MY SAM для появи нових можливостей лаунчера недостатньо.
 
 ## Структура коду
 
